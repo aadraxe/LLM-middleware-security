@@ -8,20 +8,31 @@ class ChatRequest(BaseModel):
 
 
 class DetectionResult(BaseModel):
-    allowed: bool
-    risk_score: float
-    threat_type: Optional[str] = None
-    triggered_rules: List[str] = []
-    detection_layer: Optional[str] = None   # "regex" | "fuzzy" | "fuzzy_multi_turn" | "llm_judge"
-    layer_scores: Optional[Dict[str, float]] = {}  # per-layer scores for audit
-
-
-class ChatResponse(BaseModel):
+    """Result from a single detector."""
     allowed: bool
     risk_score: float
     threat_type: Optional[str] = None
     triggered_rules: List[str] = []
     detection_layer: Optional[str] = None
     layer_scores: Optional[Dict[str, float]] = {}
+
+
+class PipelineResult(BaseModel):
+    """Aggregated result from running all detectors in the pipeline."""
+    allowed: bool
+    risk_score: float                         # highest risk score across all detectors
+    primary_threat: Optional[str] = None      # threat type of the highest-scoring detector
+    triggered_rules: List[str] = []           # all triggered rules across detectors
+    detector_results: Dict[str, dict] = {}    # per-detector full breakdown
+    blocking_detector: Optional[str] = None   # which detector caused the block
+
+
+class ChatResponse(BaseModel):
+    allowed: bool
+    risk_score: float
+    primary_threat: Optional[str] = None
+    triggered_rules: List[str] = []
+    detector_results: Dict[str, dict] = {}
+    blocking_detector: Optional[str] = None
     response: Optional[str] = None
     message: str

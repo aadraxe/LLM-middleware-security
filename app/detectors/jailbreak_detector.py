@@ -315,30 +315,44 @@ Respond ONLY with a JSON object (no markdown, no explanation):
 
 def llm_judge(prompt: str) -> tuple[bool, float, str]:
     try:
-        import httpx
-        import json as _json
+        import httpx, json, os
+        groq_key = os.environ.get("GROQ_API_KEY", "")
+        if not groq_key:
+            return False, 0.5, "LLM judge skipped: no GROQ_API_KEY set"
 
         response = httpx.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={"Content-Type": "application/json", "anthropic-version": "2023-06-01"},
-            json={
-                "model": "claude-haiku-4-5-20251001",
-                "max_tokens": 200,
-                "system": LLM_JUDGE_SYSTEM_PROMPT,
-                "messages": [{"role": "user", "content": f"Classify this prompt:\n\n{prompt[:2000]}"}],
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {groq_key}",
+                "Content-Type": "application/json",
             },
-            timeout=8.0,
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "max_tokens": 200,
+                "messages": [
+                    {"role": "system", "content": LLM_JUDGE_SYSTEM_PROMPT},
+                    {"role": "user", "content": f"Classify this prompt:\n\n{prompt[:2000]}"},
+                ],
+            },
+            timeout=15.0,
         )
         data = response.json()
-        text = data["content"][0]["text"].strip()
+
+        # If Groq didn't return the expected success shape, show what it sent
+        if "choices" not in data:
+            print(f"[GROQ SAID] {str(data)[:300]}")
+            return False, 0.5, "no choices in response"
+
+        text = data["choices"][0]["message"]["content"].strip()
         text = re.sub(r"^```json\s*|```$", "", text, flags=re.MULTILINE).strip()
-        result = _json.loads(text)
+        result = json.loads(text)
         return (
             bool(result.get("is_jailbreak", False)),
             float(result.get("confidence", 0.5)),
             result.get("reason", "LLM judge flagged this prompt"),
         )
     except Exception as e:
+        print(f"[JUDGE ERROR] {str(e)[:120]}")
         return False, 0.5, f"LLM judge unavailable: {str(e)}"
 
 
@@ -383,12 +397,13 @@ def detect_jailbreak(prompt: str, conversation_history: Optional[list] = None) -
         )
 
     # ── Layer 3: LLM-as-Judge (borderline: 0.45–0.70) ─────────────────
-    if l2_score >= ESCALATE_TO_L3:
+    if True:
         is_jailbreak, confidence, reason = llm_judge(prompt)
         layer_scores["llm_judge"] = round(confidence, 3)
 
         if is_jailbreak:
-            final_score = min((l2_score + confidence) / 2 + 0.15, 1.0)
+            final_score = max(confidence, (l2_score + confidence) / 2 + 0.15)
+            final_score = min(final_score, 1.0)
             triggered_rules.append(f"llm_judge: {reason}")
             return DetectionResult(
                 allowed=False, risk_score=round(final_score, 3), threat_type="jailbreak_attempt",
@@ -401,3 +416,16 @@ def detect_jailbreak(prompt: str, conversation_history: Optional[list] = None) -
         triggered_rules=triggered_rules, detection_layer="regex" if l2_score == l1_score else "fuzzy",
         layer_scores=layer_scores,
     )
+
+
+# ─────────────────────────────────────────────
+# DETECTOR CLASS WRAPPER (for unified pipeline)
+# ─────────────────────────────────────────────
+from app.detectors.base import BaseDetector
+
+class JailbreakDetector(BaseDetector):
+    threat_type = "jailbreak_attempt"
+    block_threshold = BLOCK_THRESHOLD
+
+    def detect(self, prompt: str, conversation_history=None) -> DetectionResult:
+        return detect_jailbreak(prompt, conversation_history)
