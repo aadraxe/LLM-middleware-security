@@ -62,3 +62,12 @@ docker-compose.override.yml
 # =========================
 *.tmp
 *.bak
+# =========================
+# Fine-tuned classifier
+# =========================
+# Trained weights (hundreds of MB) — rebuild with classifier/train.py
+models/
+# Training splits — rebuild with data/build_dataset.py (hashes in summary.json)
+data/processed/train.jsonl
+data/processed/val.jsonl
+data/processed/test.jsonl
