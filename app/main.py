@@ -3,6 +3,13 @@ from datetime import datetime
 import json
 import os
 
+try:
+    # Pick up GROQ_API_KEY / CLASSIFIER_BACKEND from a local .env if present
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 from app.models.schemas import ChatRequest, ChatResponse
 from app.detectors.pipeline import pipeline
 from app.services.llm_service import call_llm

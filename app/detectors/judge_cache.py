@@ -17,22 +17,28 @@ import os
 import time
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-JUDGE_MODEL = "llama-3.3-70b-versatile"
+# Groq retired llama-3.3-70b-versatile; gpt-oss-120b is the default replacement.
+JUDGE_MODEL = os.environ.get("JUDGE_MODEL", "openai/gpt-oss-120b")
 
 
 def _post(system_prompt: str, user_content: str, groq_key: str, timeout: float) -> dict:
     import httpx
+    body = {
+        "model": JUDGE_MODEL,
+        "max_tokens": 200,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
+        ],
+    }
+    if JUDGE_MODEL.startswith("openai/gpt-oss"):
+        # Reasoning model: keep reasoning short and out of the content field,
+        # and leave room for reasoning tokens before the JSON verdict.
+        body.update(max_tokens=600, reasoning_effort="low", include_reasoning=False)
     response = httpx.post(
         GROQ_URL,
         headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-        json={
-            "model": JUDGE_MODEL,
-            "max_tokens": 200,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content},
-            ],
-        },
+        json=body,
         timeout=timeout,
     )
     data = response.json()
