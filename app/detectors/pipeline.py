@@ -7,6 +7,7 @@ and decides allow/block based on the highest-risk detector. Designed so
 new detectors (PII, harmful content, etc.) can be added with one line.
 """
 
+import os
 from typing import Optional, List
 from app.detectors.base import BaseDetector
 from app.detectors.jailbreak_detector import JailbreakDetector
@@ -69,5 +70,34 @@ class ThreatPipeline:
         )
 
 
+CLASSIFIER_BACKENDS = ("llama", "local", "both", "none")
+
+
+def build_pipeline(backend: Optional[str] = None, local_detector: Optional[BaseDetector] = None) -> ThreatPipeline:
+    """
+    Build the pipeline for a classifier backend (default: CLASSIFIER_BACKEND env var, else "llama").
+
+      llama — regex + fuzzy + Llama 3.3 judge (original behaviour)
+      local — regex + fuzzy + local fine-tuned classifier, no API calls
+      both  — regex + fuzzy + Llama judge + local classifier
+      none  — regex + fuzzy only
+    """
+    backend = (backend or os.environ.get("CLASSIFIER_BACKEND", "llama")).lower()
+    if backend not in CLASSIFIER_BACKENDS:
+        raise ValueError(f"CLASSIFIER_BACKEND must be one of {CLASSIFIER_BACKENDS}, got {backend!r}")
+
+    use_llm = backend in ("llama", "both")
+    detectors: List[BaseDetector] = [
+        JailbreakDetector(use_llm_judge=use_llm),
+        PromptInjectionDetector(use_llm_judge=use_llm),
+    ]
+    if backend in ("local", "both"):
+        if local_detector is None:
+            from app.detectors.finetuned_detector import FineTunedDetector
+            local_detector = FineTunedDetector()
+        detectors.append(local_detector)
+    return ThreatPipeline(detectors)
+
+
 # Singleton instance used by the app
-pipeline = ThreatPipeline()
+pipeline = build_pipeline()
