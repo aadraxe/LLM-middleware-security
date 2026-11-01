@@ -1,0 +1,451 @@
+{
+  "config": {
+    "threshold": 0.61,
+    "low": 0.19,
+    "high": 0.95,
+    "blocking_rules": [
+      "jb_regex:safety_bypass",
+      "pi_fuzzy:task_switch",
+      "pi_regex:instruction_in_data"
+    ],
+    "signal_rules": [
+      "jb_fuzzy:base64_encoded_attack",
+      "jb_fuzzy:excessive_length",
+      "jb_fuzzy:extreme_length_dos",
+      "jb_fuzzy:fictional_framing_bypass",
+      "jb_fuzzy:gradual_escalation",
+      "jb_fuzzy:leet_encoding_detected",
+      "jb_fuzzy:low_entropy_token_stuffing",
+      "jb_fuzzy:multi_persona_injection",
+      "jb_fuzzy:multi_turn_escalation",
+      "jb_fuzzy:social_engineering",
+      "jb_fuzzy:unicode_manipulation",
+      "jb_fuzzy:unicode_suspicious",
+      "jb_regex:encoding_obfuscation",
+      "jb_regex:escalation_primer",
+      "jb_regex:instruction_override",
+      "jb_regex:role_manipulation",
+      "jb_regex:system_prompt_extraction",
+      "jb_regex:token_smuggling",
+      "pi_fuzzy:data_destination_url",
+      "pi_fuzzy:exfiltration_intent",
+      "pi_fuzzy:fake_conversation_turns",
+      "pi_fuzzy:injection_after_processing_task",
+      "pi_regex:context_boundary_attack",
+      "pi_regex:data_exfiltration",
+      "pi_regex:indirect_injection_marker",
+      "pi_regex:output_manipulation"
+    ],
+    "model_dir": "models/distilbert"
+  },
+  "results": {
+    "test_300": {
+      "e_finetuned_only": {
+        "n": 300,
+        "tp": 143,
+        "fp": 6,
+        "tn": 136,
+        "fn": 15,
+        "recall": 0.9051,
+        "precision": 0.9597,
+        "f1": 0.9316,
+        "fpr": 0.0423,
+        "accuracy": 0.93,
+        "recall_ci": [
+          0.8571,
+          0.9463
+        ],
+        "f1_ci": [
+          0.9,
+          0.9589
+        ],
+        "fpr_ci": [
+          0.0132,
+          0.0764
+        ],
+        "latency_ms_mean": 47.4,
+        "latency_ms_p95": 99.9,
+        "pct_sent_to_judge": 0.0,
+        "judge_calls_per_1000": 0.0
+      },
+      "f_judge_only": {
+        "n": 300,
+        "tp": 105,
+        "fp": 15,
+        "tn": 127,
+        "fn": 53,
+        "recall": 0.6646,
+        "precision": 0.875,
+        "f1": 0.7554,
+        "fpr": 0.1056,
+        "accuracy": 0.7733,
+        "recall_ci": [
+          0.5928,
+          0.7379
+        ],
+        "f1_ci": [
+          0.6985,
+          0.811
+        ],
+        "fpr_ci": [
+          0.0597,
+          0.1583
+        ],
+        "latency_ms_mean": 1346.2,
+        "latency_ms_p95": 1572.5,
+        "pct_sent_to_judge": 100.0,
+        "judge_calls_per_1000": 1000.0
+      },
+      "g_finetuned_blocking_rules": {
+        "n": 300,
+        "tp": 143,
+        "fp": 6,
+        "tn": 136,
+        "fn": 15,
+        "recall": 0.9051,
+        "precision": 0.9597,
+        "f1": 0.9316,
+        "fpr": 0.0423,
+        "accuracy": 0.93,
+        "recall_ci": [
+          0.8571,
+          0.9463
+        ],
+        "f1_ci": [
+          0.9,
+          0.9589
+        ],
+        "fpr_ci": [
+          0.0132,
+          0.0764
+        ],
+        "latency_ms_mean": 50.7,
+        "latency_ms_p95": 110.6,
+        "pct_sent_to_judge": 0.0,
+        "judge_calls_per_1000": 0.0
+      },
+      "h_cascade": {
+        "n": 300,
+        "tp": 151,
+        "fp": 15,
+        "tn": 127,
+        "fn": 7,
+        "recall": 0.9557,
+        "precision": 0.9096,
+        "f1": 0.9321,
+        "fpr": 0.1056,
+        "accuracy": 0.9267,
+        "recall_ci": [
+          0.9194,
+          0.9863
+        ],
+        "f1_ci": [
+          0.903,
+          0.96
+        ],
+        "fpr_ci": [
+          0.0567,
+          0.1618
+        ],
+        "latency_ms_mean": 250.8,
+        "latency_ms_p95": 1519.3,
+        "pct_sent_to_judge": 14.7,
+        "judge_calls_per_1000": 147.0
+      },
+      "h2_cascade_band_only": {
+        "n": 300,
+        "tp": 149,
+        "fp": 10,
+        "tn": 132,
+        "fn": 9,
+        "recall": 0.943,
+        "precision": 0.9371,
+        "f1": 0.9401,
+        "fpr": 0.0704,
+        "accuracy": 0.9367,
+        "recall_ci": [
+          0.9044,
+          0.9752
+        ],
+        "f1_ci": [
+          0.9113,
+          0.9657
+        ],
+        "fpr_ci": [
+          0.0303,
+          0.1154
+        ],
+        "latency_ms_mean": 145.6,
+        "latency_ms_p95": 1381.7,
+        "pct_sent_to_judge": 7.0,
+        "judge_calls_per_1000": 70.0
+      },
+      "d_old_all_stages": {
+        "n": 300,
+        "tp": 153,
+        "fp": 31,
+        "tn": 111,
+        "fn": 5,
+        "recall": 0.9684,
+        "precision": 0.8315,
+        "f1": 0.8947,
+        "fpr": 0.2183,
+        "accuracy": 0.88,
+        "recall_ci": [
+          0.9375,
+          0.9934
+        ],
+        "f1_ci": [
+          0.8595,
+          0.9276
+        ],
+        "fpr_ci": [
+          0.152,
+          0.2903
+        ],
+        "latency_ms_mean": 1430.5,
+        "latency_ms_p95": 2939.2,
+        "pct_sent_to_judge": 91.3,
+        "judge_calls_per_1000": 957.0
+      }
+    },
+    "deepset_200": {
+      "e_finetuned_only": {
+        "n": 200,
+        "tp": 17,
+        "fp": 1,
+        "tn": 121,
+        "fn": 61,
+        "recall": 0.2179,
+        "precision": 0.9444,
+        "f1": 0.3542,
+        "fpr": 0.0082,
+        "accuracy": 0.69,
+        "recall_ci": [
+          0.1282,
+          0.32
+        ],
+        "f1_ci": [
+          0.225,
+          0.4808
+        ],
+        "fpr_ci": [
+          0.0,
+          0.0257
+        ],
+        "latency_ms_mean": 24.4,
+        "latency_ms_p95": 53.5,
+        "pct_sent_to_judge": 0.0,
+        "judge_calls_per_1000": 0.0
+      },
+      "f_judge_only": {
+        "n": 200,
+        "tp": 39,
+        "fp": 0,
+        "tn": 122,
+        "fn": 39,
+        "recall": 0.5,
+        "precision": 1.0,
+        "f1": 0.6667,
+        "fpr": 0.0,
+        "accuracy": 0.805,
+        "recall_ci": [
+          0.3936,
+          0.6154
+        ],
+        "f1_ci": [
+          0.5648,
+          0.7619
+        ],
+        "fpr_ci": [
+          0.0,
+          0.0
+        ],
+        "latency_ms_mean": 1660.0,
+        "latency_ms_p95": 2890.1,
+        "pct_sent_to_judge": 100.0,
+        "judge_calls_per_1000": 1000.0
+      },
+      "g_finetuned_blocking_rules": {
+        "n": 200,
+        "tp": 17,
+        "fp": 1,
+        "tn": 121,
+        "fn": 61,
+        "recall": 0.2179,
+        "precision": 0.9444,
+        "f1": 0.3542,
+        "fpr": 0.0082,
+        "accuracy": 0.69,
+        "recall_ci": [
+          0.1282,
+          0.32
+        ],
+        "f1_ci": [
+          0.225,
+          0.4808
+        ],
+        "fpr_ci": [
+          0.0,
+          0.0257
+        ],
+        "latency_ms_mean": 24.9,
+        "latency_ms_p95": 55.6,
+        "pct_sent_to_judge": 0.0,
+        "judge_calls_per_1000": 0.0
+      },
+      "h_cascade": {
+        "n": 200,
+        "tp": 23,
+        "fp": 0,
+        "tn": 122,
+        "fn": 55,
+        "recall": 0.2949,
+        "precision": 1.0,
+        "f1": 0.4554,
+        "fpr": 0.0,
+        "accuracy": 0.725,
+        "recall_ci": [
+          0.2023,
+          0.3973
+        ],
+        "f1_ci": [
+          0.3366,
+          0.5686
+        ],
+        "fpr_ci": [
+          0.0,
+          0.0
+        ],
+        "latency_ms_mean": 221.9,
+        "latency_ms_p95": 1556.4,
+        "pct_sent_to_judge": 12.5,
+        "judge_calls_per_1000": 125.0
+      },
+      "h2_cascade_band_only": {
+        "n": 200,
+        "tp": 22,
+        "fp": 0,
+        "tn": 122,
+        "fn": 56,
+        "recall": 0.2821,
+        "precision": 1.0,
+        "f1": 0.44,
+        "fpr": 0.0,
+        "accuracy": 0.72,
+        "recall_ci": [
+          0.1846,
+          0.381
+        ],
+        "f1_ci": [
+          0.3116,
+          0.5518
+        ],
+        "fpr_ci": [
+          0.0,
+          0.0
+        ],
+        "latency_ms_mean": 210.9,
+        "latency_ms_p95": 1556.4,
+        "pct_sent_to_judge": 11.5,
+        "judge_calls_per_1000": 115.0
+      },
+      "d_old_all_stages": {
+        "n": 200,
+        "tp": 41,
+        "fp": 1,
+        "tn": 121,
+        "fn": 37,
+        "recall": 0.5256,
+        "precision": 0.9762,
+        "f1": 0.6833,
+        "fpr": 0.0082,
+        "accuracy": 0.81,
+        "recall_ci": [
+          0.4186,
+          0.642
+        ],
+        "f1_ci": [
+          0.5818,
+          0.7762
+        ],
+        "fpr_ci": [
+          0.0,
+          0.0257
+        ],
+        "latency_ms_mean": 1671.1,
+        "latency_ms_p95": 2968.2,
+        "pct_sent_to_judge": 98.5,
+        "judge_calls_per_1000": 990.0
+      }
+    },
+    "test_full": {
+      "e_finetuned_only": {
+        "n": 912,
+        "tp": 422,
+        "fp": 21,
+        "tn": 435,
+        "fn": 34,
+        "recall": 0.9254,
+        "precision": 0.9526,
+        "f1": 0.9388,
+        "fpr": 0.0461,
+        "accuracy": 0.9397,
+        "recall_ci": [
+          0.9005,
+          0.947
+        ],
+        "f1_ci": [
+          0.9227,
+          0.9537
+        ],
+        "fpr_ci": [
+          0.0275,
+          0.0676
+        ],
+        "latency_ms_mean": 46.0,
+        "latency_ms_p95": 100.5,
+        "pct_sent_to_judge": 0.0,
+        "judge_calls_per_1000": 0.0
+      },
+      "g_finetuned_blocking_rules": {
+        "n": 912,
+        "tp": 423,
+        "fp": 23,
+        "tn": 433,
+        "fn": 33,
+        "recall": 0.9276,
+        "precision": 0.9484,
+        "f1": 0.9379,
+        "fpr": 0.0504,
+        "accuracy": 0.9386,
+        "recall_ci": [
+          0.903,
+          0.9491
+        ],
+        "f1_ci": [
+          0.9211,
+          0.9534
+        ],
+        "fpr_ci": [
+          0.0318,
+          0.0722
+        ],
+        "latency_ms_mean": 49.1,
+        "latency_ms_p95": 112.8,
+        "pct_sent_to_judge": 0.0,
+        "judge_calls_per_1000": 0.0
+      }
+    }
+  },
+  "best": "d_old_all_stages",
+  "judge": {
+    "verdicts": 500,
+    "unparseable": 0,
+    "mean_latency_ms": 1471.729
+  },
+  "n_errors_best": {
+    "false_positives": 32,
+    "false_negatives": 42
+  }
+}

@@ -1,0 +1,30 @@
+rule,val_hits,val_true_attacks,val_precision,decision,reason
+jb_regex:safety_bypass,28,28,1.0,blocking,precision 100.0% on 28 hits
+pi_regex:instruction_in_data,24,24,1.0,blocking,precision 100.0% on 24 hits
+pi_fuzzy:task_switch,10,10,1.0,blocking,precision 100.0% on 10 hits
+pi_fuzzy:exfiltration_intent,64,50,0.7812,signal,precision 78.1% < 95%
+jb_regex:instruction_override,57,49,0.8596,signal,precision 86.0% < 95%
+pi_regex:context_boundary_attack,56,12,0.2143,signal,precision 21.4% < 95%
+jb_fuzzy:leet_encoding_detected,49,40,0.8163,signal,precision 81.6% < 95%
+jb_fuzzy:fictional_framing_bypass,46,43,0.9348,signal,precision 93.5% < 95%
+jb_fuzzy:excessive_length,20,10,0.5,signal,precision 50.0% < 95%
+jb_regex:role_manipulation,18,15,0.8333,signal,precision 83.3% < 95%
+jb_fuzzy:gradual_escalation,9,9,1.0,signal,only 9 validation hits (< 10)
+pi_regex:output_manipulation,9,8,0.8889,signal,only 9 validation hits (< 10)
+pi_fuzzy:injection_after_processing_task,9,6,0.6667,signal,only 9 validation hits (< 10)
+pi_fuzzy:data_destination_url,5,1,0.2,signal,only 5 validation hits (< 10)
+jb_regex:token_smuggling,4,2,0.5,signal,only 4 validation hits (< 10)
+jb_fuzzy:unicode_manipulation,4,1,0.25,signal,only 4 validation hits (< 10)
+pi_fuzzy:fake_conversation_turns,4,4,1.0,signal,only 4 validation hits (< 10)
+jb_regex:encoding_obfuscation,3,0,0.0,signal,only 3 validation hits (< 10)
+jb_regex:system_prompt_extraction,2,2,1.0,signal,only 2 validation hits (< 10)
+jb_fuzzy:multi_persona_injection,2,2,1.0,signal,only 2 validation hits (< 10)
+pi_regex:indirect_injection_marker,2,2,1.0,signal,only 2 validation hits (< 10)
+jb_fuzzy:social_engineering,1,1,1.0,signal,only 1 validation hits (< 10)
+jb_fuzzy:extreme_length_dos,1,1,1.0,signal,only 1 validation hits (< 10)
+pi_regex:data_exfiltration,1,1,1.0,signal,only 1 validation hits (< 10)
+jb_regex:escalation_primer,0,0,,signal,only 0 validation hits (< 10)
+jb_fuzzy:base64_encoded_attack,0,0,,signal,only 0 validation hits (< 10)
+jb_fuzzy:unicode_suspicious,0,0,,signal,only 0 validation hits (< 10)
+jb_fuzzy:low_entropy_token_stuffing,0,0,,signal,only 0 validation hits (< 10)
+jb_fuzzy:multi_turn_escalation,0,0,,signal,only 0 validation hits (< 10)
