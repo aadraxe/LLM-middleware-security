@@ -99,5 +99,32 @@ def build_pipeline(backend: Optional[str] = None, local_detector: Optional[BaseD
     return ThreatPipeline(detectors)
 
 
+PIPELINE_MODES = ("local_only", "cascade", "full")
+
+
+def build_gateway_pipeline(mode: Optional[str] = None):
+    """
+    Pipeline for the gateway, chosen by PIPELINE_MODE:
+
+      local_only — high-precision rules + fine-tuned classifier, no API calls
+      cascade    — classifier decides confident cases; uncertain ones and
+                   signal-rule hits go to the LLM judge
+      full       — every stage (same as CLASSIFIER_BACKEND=both)
+
+    PIPELINE_MODE unset → CLASSIFIER_BACKEND as before (default "llama"),
+    so existing deployments behave exactly as they did.
+    """
+    mode = mode or os.environ.get("PIPELINE_MODE")
+    if not mode:
+        return build_pipeline()
+    mode = mode.lower()
+    if mode not in PIPELINE_MODES:
+        raise ValueError(f"PIPELINE_MODE must be one of {PIPELINE_MODES}, got {mode!r}")
+    if mode == "full":
+        return build_pipeline("both")
+    from app.detectors.cascade import TieredPipeline
+    return TieredPipeline(mode)
+
+
 # Singleton instance used by the app
-pipeline = build_pipeline()
+pipeline = build_gateway_pipeline()
