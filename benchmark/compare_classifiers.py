@@ -38,6 +38,8 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 os.environ.setdefault("JUDGE_CACHE_DIR", os.path.join(ROOT, "benchmark", "judge_cache"))
+# The earlier run used Groq's default temperature; keep it so these results reproduce.
+os.environ.setdefault("JUDGE_TEMPERATURE", "default")
 
 try:
     from dotenv import load_dotenv
