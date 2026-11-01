@@ -11,7 +11,7 @@ except ImportError:
     pass
 
 from app.models.schemas import ChatRequest, ChatResponse
-from app.detectors.pipeline import pipeline
+from app.detectors.pipeline import build_gateway_pipeline
 from app.services.llm_service import call_llm
 
 
@@ -22,6 +22,9 @@ app = FastAPI(
 )
 
 LOG_FILE = "app/logs/security_events.jsonl"
+
+# Built once at startup; PIPELINE_MODE picks local_only (default), cascade or full
+pipeline = build_gateway_pipeline()
 
 
 def log_event(event: dict):

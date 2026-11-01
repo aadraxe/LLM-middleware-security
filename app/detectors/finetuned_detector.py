@@ -19,7 +19,7 @@ from typing import Optional, List
 from app.detectors.base import BaseDetector
 from app.models.schemas import DetectionResult
 
-DEFAULT_MODEL_DIR = os.environ.get("LOCAL_CLASSIFIER_PATH", "models/finetuned-classifier")
+DEFAULT_MODEL_DIR = os.environ.get("LOCAL_CLASSIFIER_PATH", "models/distilbert")
 
 
 class FineTunedClassifier:

@@ -77,9 +77,9 @@ def build_pipeline(backend: Optional[str] = None, local_detector: Optional[BaseD
     """
     Build the pipeline for a classifier backend (default: CLASSIFIER_BACKEND env var, else "llama").
 
-      llama — regex + fuzzy + Llama 3.3 judge (original behaviour)
+      llama — regex + fuzzy + LLM judge (original pipeline; the judge is now gpt-oss-120b)
       local — regex + fuzzy + local fine-tuned classifier, no API calls
-      both  — regex + fuzzy + Llama judge + local classifier
+      both  — regex + fuzzy + LLM judge + local classifier
       none  — regex + fuzzy only
     """
     backend = (backend or os.environ.get("CLASSIFIER_BACKEND", "llama")).lower()
@@ -100,31 +100,55 @@ def build_pipeline(backend: Optional[str] = None, local_detector: Optional[BaseD
 
 
 PIPELINE_MODES = ("local_only", "cascade", "full")
+DEFAULT_PIPELINE_MODE = "local_only"
+
+
+def resolve_pipeline_mode(mode: Optional[str] = None) -> str:
+    """
+    Which pipeline the gateway runs:
+      explicit argument > PIPELINE_MODE > legacy CLASSIFIER_BACKEND > local_only.
+    A legacy CLASSIFIER_BACKEND value is returned as "backend:<value>".
+    """
+    mode = mode or os.environ.get("PIPELINE_MODE")
+    if mode:
+        mode = mode.lower()
+        if mode not in PIPELINE_MODES:
+            raise ValueError(f"PIPELINE_MODE must be one of {PIPELINE_MODES}, got {mode!r}")
+        return mode
+    if os.environ.get("CLASSIFIER_BACKEND"):
+        return f"backend:{os.environ['CLASSIFIER_BACKEND'].lower()}"
+    return DEFAULT_PIPELINE_MODE
 
 
 def build_gateway_pipeline(mode: Optional[str] = None):
     """
-    Pipeline for the gateway, chosen by PIPELINE_MODE:
+    Pipeline for the gateway, chosen by PIPELINE_MODE (default local_only):
 
       local_only — high-precision rules + fine-tuned classifier, no API calls
       cascade    — classifier decides confident cases; uncertain ones and
                    signal-rule hits go to the LLM judge
-      full       — every stage (same as CLASSIFIER_BACKEND=both)
+      full       — every stage: regex + fuzzy + LLM judge + classifier
 
-    PIPELINE_MODE unset → CLASSIFIER_BACKEND as before (default "llama"),
-    so existing deployments behave exactly as they did.
+    Setting the legacy CLASSIFIER_BACKEND (llama / local / both / none) still
+    works when PIPELINE_MODE is unset.
     """
-    mode = mode or os.environ.get("PIPELINE_MODE")
-    if not mode:
-        return build_pipeline()
-    mode = mode.lower()
-    if mode not in PIPELINE_MODES:
-        raise ValueError(f"PIPELINE_MODE must be one of {PIPELINE_MODES}, got {mode!r}")
+    mode = resolve_pipeline_mode(mode)
+    if mode.startswith("backend:"):
+        return build_pipeline(mode.split(":", 1)[1])
+    if mode in ("local_only", "cascade", "full"):
+        _require_local_model()
     if mode == "full":
         return build_pipeline("both")
     from app.detectors.cascade import TieredPipeline
     return TieredPipeline(mode)
 
 
-# Singleton instance used by the app
-pipeline = build_gateway_pipeline()
+def _require_local_model():
+    from app.detectors.finetuned_detector import DEFAULT_MODEL_DIR
+    model_dir = os.environ.get("LOCAL_CLASSIFIER_PATH") or DEFAULT_MODEL_DIR
+    if not os.path.isdir(model_dir):
+        raise RuntimeError(
+            f"Fine-tuned classifier not found at {model_dir!r}. Train it with "
+            "`python classifier/train.py --model distilbert-base-uncased --run-name distilbert`, "
+            "point LOCAL_CLASSIFIER_PATH at a trained model, or set CLASSIFIER_BACKEND=llama "
+            "to run the original regex + fuzzy + LLM judge pipeline without it.")
