@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>LlmGuard</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <PackageId>LlmGuard</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>aadraxe</Authors>
+    <Description>ASP.NET Core middleware and HttpClient handler that screen LLM prompts through the LLM security gateway's POST /v1/check endpoint.</Description>
+    <PackageTags>llm;security;prompt-injection;jailbreak;aspnetcore;middleware</PackageTags>
+    <RepositoryUrl>https://github.com/aadraxe/LLM-middleware-security</RepositoryUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <InternalsVisibleTo Include="LlmGuard.Tests" />
+  </ItemGroup>
+
+</Project>

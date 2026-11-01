@@ -71,3 +71,11 @@ docker-compose.override.yml
 data/processed/train.jsonl
 data/processed/val.jsonl
 data/processed/test.jsonl
+
+# =========================
+# .NET
+# =========================
+dotnet/**/bin/
+dotnet/**/obj/
+dotnet/artifacts/
+dotnet/**/TestResults/
