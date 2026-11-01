@@ -16,6 +16,10 @@ This middleware sits in front of the LLM as a reusable security layer that inspe
 
 `POST /secure-chat` runs the prompt through the configured pipeline. If it is blocked, the response says why (which rule, classifier score or judge verdict) and the protected LLM is never called. If it is allowed, the prompt is forwarded to the LLM. Every decision is logged to `app/logs/security_events.jsonl`.
 
+`POST /v1/check` only screens text, for other services to call: `{"text": "...", "source": "user"|"rag"}` returns `{"verdict": "allow"|"block", "score", "layer": "rules"|"fuzzy"|"classifier"|"judge", "latency_ms"}`. It requires an `X-API-Key` header matching one of the comma-separated keys in the `GATEWAY_API_KEYS` environment variable (401 otherwise), and it logs only the text's length and SHA-256, never the text.
+
+**.NET apps** can route their LLM traffic through the gateway with the [LlmGuard](dotnet/README.md) package: ASP.NET Core middleware for incoming prompts and an `HttpClient` handler for outgoing LLM calls.
+
 The building blocks:
 
 1. **Regex rules**: fast, deterministic patterns for known attack phrasings (29 named rules across two detectors)
@@ -141,7 +145,7 @@ After retrieving the chunks most relevant to a query, **each chunk is screened b
 - **Backend / API:** Python, FastAPI, Pydantic
 - **Detection:** regex, custom heuristics, fine-tuned DistilBERT (PyTorch, Hugging Face Transformers), LLM-as-judge (`gpt-oss-120b` via Groq)
 - **RAG:** ChromaDB (vector store), sentence-transformers (`all-MiniLM-L6-v2`)
-- **Testing:** pytest (81 tests)
+- **Testing:** pytest (100 tests), xUnit (60 tests for the .NET client)
 
 ## Project structure
 
