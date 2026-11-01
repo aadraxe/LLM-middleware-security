@@ -1,0 +1,57 @@
+{
+  "chosen_on": "validation",
+  "model_dir": "models/distilbert",
+  "threshold": 0.61,
+  "low": 0.19,
+  "high": 0.95,
+  "blocking_rules": [
+    "jb_regex:safety_bypass",
+    "pi_fuzzy:task_switch",
+    "pi_regex:instruction_in_data"
+  ],
+  "signal_rules": [
+    "jb_fuzzy:base64_encoded_attack",
+    "jb_fuzzy:excessive_length",
+    "jb_fuzzy:extreme_length_dos",
+    "jb_fuzzy:fictional_framing_bypass",
+    "jb_fuzzy:gradual_escalation",
+    "jb_fuzzy:leet_encoding_detected",
+    "jb_fuzzy:low_entropy_token_stuffing",
+    "jb_fuzzy:multi_persona_injection",
+    "jb_fuzzy:multi_turn_escalation",
+    "jb_fuzzy:social_engineering",
+    "jb_fuzzy:unicode_manipulation",
+    "jb_fuzzy:unicode_suspicious",
+    "jb_regex:encoding_obfuscation",
+    "jb_regex:escalation_primer",
+    "jb_regex:instruction_override",
+    "jb_regex:role_manipulation",
+    "jb_regex:system_prompt_extraction",
+    "jb_regex:token_smuggling",
+    "pi_fuzzy:data_destination_url",
+    "pi_fuzzy:exfiltration_intent",
+    "pi_fuzzy:fake_conversation_turns",
+    "pi_fuzzy:injection_after_processing_task",
+    "pi_regex:context_boundary_attack",
+    "pi_regex:data_exfiltration",
+    "pi_regex:indirect_injection_marker",
+    "pi_regex:output_manipulation"
+  ],
+  "rule_criteria": {
+    "min_precision": 0.95,
+    "min_hits": 10
+  },
+  "band_criteria": {
+    "min_accuracy_outside": 0.97,
+    "max_coverage": 0.25
+  },
+  "validation_band": {
+    "low": 0.19,
+    "high": 0.95,
+    "band_width": 0.76,
+    "band_coverage": 0.0713,
+    "escalated_incl_signals": 0.2971,
+    "accuracy_outside_band": 0.9705,
+    "errors_outside_band": 25
+  }
+}

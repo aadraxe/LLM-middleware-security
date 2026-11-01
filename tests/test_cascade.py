@@ -147,3 +147,9 @@ def test_default_gateway_pipeline_unchanged(monkeypatch):
 def test_invalid_pipeline_mode_raises():
     with pytest.raises(ValueError):
         build_gateway_pipeline("turbo")
+
+
+def test_committed_cascade_config_is_consistent():
+    cfg = CascadeConfig.load()
+    assert 0 <= cfg.low < cfg.threshold < cfg.high <= 1
+    assert cfg.blocking_rules and not set(cfg.blocking_rules) & set(cfg.signal_rules)
