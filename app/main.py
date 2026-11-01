@@ -10,21 +10,31 @@ try:
 except ImportError:
     pass
 
+from contextlib import asynccontextmanager
+
 from app.models.schemas import ChatRequest, ChatResponse
-from app.detectors.pipeline import build_gateway_pipeline
+from app.gateway_state import get_pipeline
 from app.services.llm_service import call_llm
+from app import check_api
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Build the pipeline at startup (PIPELINE_MODE: local_only by default, cascade or
+    # full) so a missing model fails immediately rather than on the first request.
+    get_pipeline()
+    yield
 
 
 app = FastAPI(
     title="Secure LLM Gateway",
     description="Multi-layer middleware detecting jailbreaks and prompt injection before prompts reach an LLM.",
     version="0.3.0",
+    lifespan=lifespan,
 )
+app.include_router(check_api.router)
 
 LOG_FILE = "app/logs/security_events.jsonl"
-
-# Built once at startup; PIPELINE_MODE picks local_only (default), cascade or full
-pipeline = build_gateway_pipeline()
 
 
 def log_event(event: dict):
@@ -38,13 +48,13 @@ def root():
     return {
         "message": "Secure LLM Gateway is running",
         "version": "0.3.0",
-        "detectors": [d.name for d in pipeline.detectors],
+        "detectors": [d.name for d in get_pipeline().detectors],
     }
 
 
 @app.post("/secure-chat", response_model=ChatResponse)
 def secure_chat(request: ChatRequest):
-    result = pipeline.analyze(
+    result = get_pipeline().analyze(
         request.prompt,
         conversation_history=request.conversation_history,
     )

@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import Optional, List, Dict
+from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Literal
 
 
 class ChatRequest(BaseModel):
@@ -36,3 +36,17 @@ class ChatResponse(BaseModel):
     blocking_detector: Optional[str] = None
     response: Optional[str] = None
     message: str
+
+
+class CheckRequest(BaseModel):
+    """POST /v1/check request: one piece of text to screen."""
+    text: str = Field(min_length=1, max_length=100_000)
+    source: Literal["user", "rag"] = "user"   # where the text came from (logged)
+
+
+class CheckResponse(BaseModel):
+    """POST /v1/check response."""
+    verdict: Literal["allow", "block"]
+    score: float                               # pipeline risk score, 0–1
+    layer: Literal["rules", "fuzzy", "classifier", "judge"]  # stage that decided
+    latency_ms: float                          # gateway processing time
