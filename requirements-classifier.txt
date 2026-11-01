@@ -1,0 +1,7 @@
+# Optional: only needed for the local fine-tuned classifier (CLASSIFIER_BACKEND=local|both)
+# CPU wheel: pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch
+transformers
+peft
+sentencepiece
+protobuf
