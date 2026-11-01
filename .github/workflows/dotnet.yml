@@ -1,0 +1,44 @@
+name: dotnet
+
+on:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: dotnet
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the .NET 8 SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 8.0.x
+
+      # Runners ship with newer SDKs too, and dotnet picks the newest by default.
+      # Pin the 8.0 SDK that setup-dotnet installed so CI really builds with .NET 8.
+      - name: Pin the .NET 8 SDK
+        run: |
+          sdk=$(dotnet --list-sdks | awk '/^8\./ {print $1}' | sort -V | tail -n 1)
+          test -n "$sdk"
+          dotnet new globaljson --sdk-version "$sdk" --force
+          dotnet --version
+
+      - name: Restore
+        run: dotnet restore LlmGuard.sln
+
+      - name: Build
+        run: dotnet build LlmGuard.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test LlmGuard.sln --configuration Release --no-build --verbosity normal
