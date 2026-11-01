@@ -95,6 +95,10 @@ def _recording_judge_request(*args, **kwargs):
         data = _real_judge_request(*args, **kwargs)
     except judge_cache.DailyLimitReached as e:
         raise QuotaExhausted(str(e))
+    except Exception as e:
+        # Anything else (e.g. a timeout that outlasted the retries) must stop the
+        # run: the detector's fallback would otherwise count it as "allow".
+        raise JudgeFailed(f"{type(e).__name__}: {e}")
     if "choices" not in data:
         raise JudgeFailed(f"status {data.get('_status')}: {str(data.get('error', data))[:200]}")
     _calls.append({"latency_ms": data.get("_latency_ms", 0.0), "cached": data.get("_cached", False)})
@@ -387,7 +391,8 @@ def write_outputs(results, lang_results, split, band, frontier, cfg, sets, judge
 
     L += ["", "## Judge usage", "",
           f"- Verdicts: {judge_stats['verdicts']} prompts, {judge_stats['unparseable']} unparseable "
-          "(counted as 'allow', as the gateway would).",
+          "(counted as 'allow', as the gateway would). Network errors are retried and otherwise "
+          "stop the run, so none are counted as verdicts.",
           f"- Mean judge latency per verdict: {judge_stats['mean_latency_ms']:.0f} ms "
           "(recorded on the original, uncached call).", "",
           f"Best config for error analysis (highest mean F1 over test_300 and deepset_200): **{CONFIGS[best]}**. "
@@ -411,7 +416,7 @@ def write_errors(sets, best, cfg):
         for kind, (set_name, r) in picked:
             disagree = (r["judge"]["attack"] != bool(r["label"])) and (
                 (r["label"] == 0 and r["s"] >= 0.9) or (r["label"] == 1 and r["s"] <= 0.1))
-            w.writerow([kind, set_name, r.get("source"), r.get("language", "en"), r["label"], round(r["s"], 3),
+            w.writerow([kind, set_name, r.get("source"), r.get("language") or "", r["label"], round(r["s"], 3),
                         int(r["judge"]["attack"]), r.get("route", ""), ";".join(r["fired"]), int(disagree),
                         " ".join(r["text"].split())])
     return len(fps), len(fns)

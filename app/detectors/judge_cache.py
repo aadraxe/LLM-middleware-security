@@ -71,9 +71,18 @@ class DailyLimitReached(RuntimeError):
 
 def _post_with_retry(system_prompt, user_content, groq_key, timeout) -> dict:
     delay = 5.0
+    import httpx
+    data = {"_status": None, "error": {"message": "network error on every attempt"}}
     for attempt in range(8):
         start = time.perf_counter()
-        data = _post(system_prompt, user_content, groq_key, timeout)
+        try:
+            data = _post(system_prompt, user_content, groq_key, timeout)
+        except httpx.TransportError as e:
+            # Timeouts / dropped connections: retry rather than fail open
+            print(f"[JUDGE] {type(e).__name__}, retrying in {delay:.0f}s", flush=True)
+            time.sleep(delay)
+            delay = min(delay * 2, 120)
+            continue
         data["_latency_ms"] = (time.perf_counter() - start) * 1000
         if "choices" in data:
             return data
