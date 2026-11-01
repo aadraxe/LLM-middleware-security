@@ -71,7 +71,10 @@ def predict(model, tokenizer, texts, max_len, device, batch_size=32):
 
 
 def build_model(args):
-    model = AutoModelForSequenceClassification.from_pretrained(args.model, num_labels=2)
+    # Force fp32: transformers v5 loads in the checkpoint's dtype, and
+    # deberta-v3 checkpoints are fp16, which diverges to NaN under AdamW.
+    model = AutoModelForSequenceClassification.from_pretrained(
+        args.model, num_labels=2, dtype=torch.float32)
     if not args.lora:
         return model
     from peft import LoraConfig, get_peft_model, TaskType
@@ -142,6 +145,8 @@ def main():
                             padding=True, return_tensors="pt").to(device)
             labels = torch.tensor([r["label"] for r in rows], device=device)
             loss = model(**enc, labels=labels).loss
+            if not torch.isfinite(loss):
+                raise SystemExit(f"non-finite loss at step {step}: training diverged, nothing saved")
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optim.step()
