@@ -161,28 +161,14 @@ Respond ONLY with JSON (no markdown):
 
 def llm_judge(prompt: str) -> tuple[bool, float, str]:
     try:
-        import httpx, json, os
+        import json, os
+        from app.detectors.judge_cache import judge_request
         groq_key = os.environ.get("GROQ_API_KEY", "")
         if not groq_key:
             return False, 0.5, "LLM judge skipped: no GROQ_API_KEY set"
 
-        response = httpx.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {groq_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "llama-3.3-70b-versatile",
-                "max_tokens": 200,
-                "messages": [
-                    {"role": "system", "content": LLM_JUDGE_SYSTEM_PROMPT},
-                    {"role": "user", "content": f"Classify this input:\n\n{prompt[:2000]}"},
-                ],
-            },
-            timeout=15.0,
-        )
-        data = response.json()
+        data = judge_request(LLM_JUDGE_SYSTEM_PROMPT,
+                             f"Classify this input:\n\n{prompt[:2000]}", groq_key)
         text = data["choices"][0]["message"]["content"].strip()
         text = re.sub(r"^```json\s*|```$", "", text, flags=re.MULTILINE).strip()
         result = json.loads(text)
@@ -201,6 +187,9 @@ def llm_judge(prompt: str) -> tuple[bool, float, str]:
 class PromptInjectionDetector(BaseDetector):
     threat_type = "prompt_injection"
     block_threshold = BLOCK_THRESHOLD
+
+    def __init__(self, use_llm_judge: bool = True):
+        self.use_llm_judge = use_llm_judge
 
     def detect(self, prompt: str, conversation_history: Optional[list] = None) -> DetectionResult:
         normalized = prompt.lower().strip()
@@ -238,7 +227,7 @@ class PromptInjectionDetector(BaseDetector):
             )
 
         # Layer 3 — LLM judge (borderline)
-        if l2_score >= ESCALATE_TO_L3:
+        if self.use_llm_judge and l2_score >= ESCALATE_TO_L3:
             is_injection, confidence, reason = llm_judge(prompt)
             layer_scores["llm_judge"] = round(confidence, 3)
             if is_injection:

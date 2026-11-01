@@ -26,7 +26,7 @@ def call_llm(prompt: str) -> str:
                 "Content-Type": "application/json",
             },
             json={
-                "model": "llama-3.3-70b-versatile",
+                "model": os.environ.get("LLM_MODEL", "openai/gpt-oss-120b"),
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": 1024,
             },
