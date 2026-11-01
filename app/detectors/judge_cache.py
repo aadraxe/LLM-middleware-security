@@ -43,7 +43,12 @@ def _post(system_prompt: str, user_content: str, groq_key: str, timeout: float) 
     )
     data = response.json()
     data["_status"] = response.status_code
+    data["_retry_after"] = float(response.headers.get("retry-after", 0) or 0)
     return data
+
+
+class DailyLimitReached(RuntimeError):
+    """Groq's per-day quota is used up; retrying today won't help."""
 
 
 def judge_request(system_prompt: str, user_content: str, groq_key: str,
@@ -76,7 +81,11 @@ def judge_request(system_prompt: str, user_content: str, groq_key: str,
             return data
         if data.get("_status") not in (429, 500, 502, 503):
             return data  # non-retryable: don't cache, let the caller handle it
-        print(f"[JUDGE] status {data.get('_status')}, retrying in {delay:.0f}s", flush=True)
-        time.sleep(delay)
+        message = str(data.get("error", {}).get("message", ""))
+        if "per day" in message:
+            raise DailyLimitReached(message[:200])
+        wait = data.get("_retry_after") or delay
+        print(f"[JUDGE] status {data.get('_status')}, retrying in {wait:.0f}s", flush=True)
+        time.sleep(wait + 0.5)
         delay = min(delay * 2, 120)
     return data
