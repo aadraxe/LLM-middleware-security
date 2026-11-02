@@ -25,4 +25,8 @@ internal static partial class Log
     [LoggerMessage(EventId = 4, Level = LogLevel.Warning,
         Message = "LlmGuard rejected {Path} with {StatusCode}: {Reason}")]
     public static partial void Rejected(ILogger logger, string path, int statusCode, string reason);
+
+    [LoggerMessage(EventId = 5, Level = LogLevel.Warning,
+        Message = "LlmGuard payload inspection {Outcome}: {Reason}")]
+    public static partial void InspectionFailed(ILogger logger, GuardOutcome outcome, string reason);
 }

@@ -62,7 +62,7 @@ public sealed class LlmGuardBlockedException : LlmGuardException
         : base($"LlmGuard blocked message {messageIndex} (layer: {decision.Layer}).", decision, messageIndex, role) { }
 }
 
-/// <summary>Thrown by <see cref="LlmGuardHandler"/> under <see cref="FailMode.FailClosed"/> when no verdict could be obtained.</summary>
+/// <summary>Thrown when screening fails closed, including oversized or unreadable payloads in any failure mode.</summary>
 public sealed class LlmGuardUnavailableException : LlmGuardException
 {
     /// <summary>Creates the exception.</summary>

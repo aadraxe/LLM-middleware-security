@@ -42,6 +42,7 @@ internal sealed class LlmGuardClient : ILlmGuardClient
     public async Task<GuardDecision> CheckAsync(string text, string source, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(text);
+        cancellationToken.ThrowIfCancellationRequested();
         var stopwatch = Stopwatch.StartNew();
         using var timeout = new CancellationTokenSource(_options.Timeout);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
@@ -89,6 +90,10 @@ internal sealed class LlmGuardClient : ILlmGuardClient
         {
             failure = "malformed gateway response (unexpected content type)";
         }
+        catch (IOException)
+        {
+            failure = "gateway response could not be read";
+        }
 
         var failed = new GuardDecision(
             _options.FailMode == FailMode.FailOpen ? GuardOutcome.FailedOpen : GuardOutcome.FailedClosed,
@@ -125,6 +130,12 @@ internal sealed class LlmGuardClient : ILlmGuardClient
         if (string.IsNullOrEmpty(body.Layer))
         {
             failure = "malformed gateway response (missing layer)";
+            return false;
+        }
+        if (body.Layer is not ("rules" or "fuzzy" or "classifier" or "judge")
+            || body.LatencyMs is not { } latency || !double.IsFinite(latency) || latency < 0)
+        {
+            failure = "malformed gateway response (invalid metadata)";
             return false;
         }
         return true;

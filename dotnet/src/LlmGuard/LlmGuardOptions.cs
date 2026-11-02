@@ -3,8 +3,7 @@ namespace LlmGuard;
 /// <summary>What to do when the gateway can't give a verdict (down, slow, or a malformed reply).</summary>
 public enum FailMode
 {
-    /// <summary>Let the prompt through and log a warning. The default: an outage of the
-    /// security gateway shouldn't take the whole application down with it.</summary>
+    /// <summary>Explicit legacy opt-in: permit unscreened content and log a warning.</summary>
     FailOpen,
 
     /// <summary>Reject the prompt. Use when an unscreened prompt is worse than an outage.</summary>
@@ -40,10 +39,10 @@ public sealed class LlmGuardOptions
     /// objects, e.g. <c>input.text</c>. Default <c>prompt</c>.</summary>
     public string PromptJsonField { get; set; } = "prompt";
 
-    /// <summary>Behaviour when the gateway can't give a verdict. Default <see cref="FailMode.FailOpen"/>.</summary>
-    public FailMode FailMode { get; set; } = FailMode.FailOpen;
+    /// <summary>Behaviour when screening is unavailable. Default <see cref="FailMode.FailClosed"/>.</summary>
+    public FailMode FailMode { get; set; } = FailMode.FailClosed;
 
-    /// <summary>Largest request body the middleware will read; bigger bodies on protected
-    /// routes are rejected with 413 rather than passed through unscreened. Default 1 MiB.</summary>
+    /// <summary>Largest incoming or outgoing protected body to buffer. Oversized bodies
+    /// are always rejected, including under FailOpen. Default 1 MiB.</summary>
     public int MaxBodyBytes { get; set; } = 1024 * 1024;
 }

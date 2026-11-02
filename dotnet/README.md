@@ -35,7 +35,7 @@ Targets .NET 8 (`net8.0`). It has no package dependencies beyond the ASP.NET Cor
      "Timeout": "00:00:02",
      "ProtectedRoutes": [ "/chat" ],
      "PromptJsonField": "prompt",
-     "FailMode": "FailOpen"
+     "FailMode": "FailClosed"
    }
    ```
 
@@ -93,8 +93,8 @@ curl -X POST http://localhost:5080/chat -H "Content-Type: application/json" -d '
 | `Timeout` | 2 s | Maximum time for one gateway check |
 | `ProtectedRoutes` | none | Paths the middleware screens; each also covers its sub-paths. Only `POST`, `PUT` and `PATCH` are screened |
 | `PromptJsonField` | `prompt` | JSON field holding the prompt; dots reach nested objects (`input.text`) |
-| `FailMode` | `FailOpen` | What happens when the gateway gives no verdict (see below) |
-| `MaxBodyBytes` | 1 MiB | Bodies larger than this on protected routes are rejected with 413 |
+| `FailMode` | `FailClosed` | Reject when screening is unavailable; `FailOpen` is explicit legacy opt-in |
+| `MaxBodyBytes` | 1 MiB | Incoming and outgoing protected body limit; oversized requests always stop |
 
 Invalid settings (missing key, non-HTTP URL, zero timeout) stop the app at startup rather than at the first request.
 
@@ -106,14 +106,16 @@ Invalid settings (missing key, non-HTTP URL, zero timeout) stop the app at start
 | Blocked | **403** `{"error":"prompt_blocked","reason":"…","layer":"classifier"}` | Throws `LlmGuardBlockedException` (with `MessageIndex`, `Role`, `Decision`) |
 | No verdict, `FailOpen` | Request continues; warning logged | Request is sent; warning logged |
 | No verdict, `FailClosed` | **503** `{"error":"guard_unavailable",…}` | Throws `LlmGuardUnavailableException` |
-| Body over `MaxBodyBytes` | **413** | n/a |
-| No prompt field, not JSON, empty | Passes through unscreened (debug log) | Passes through unscreened |
+| Body over `MaxBodyBytes` | **413** | Throws `LlmGuardUnavailableException` (`OversizedPayload`) |
+| Missing/unsupported content, invalid JSON/type (default) | **503** `payload_unscreenable` with fixed reason code | Throws `LlmGuardUnavailableException` with fixed reason code |
+| Same extraction/format errors, explicit `FailOpen` | Continues with warning | Sends with warning |
+| Stream read failure (any mode) | **503** `payload_unscreenable` | Throws `LlmGuardUnavailableException` (`ExtractionFailure`) |
 
 "No verdict" covers a timeout, a connection error, any non-2xx reply (including 401 for a bad key) and a malformed reply (invalid JSON, unknown verdict, missing or out-of-range score). A malformed reply is never treated as "allow" by accident; it goes through `FailMode` like any other failure.
 
 ## Design decisions
 
-**Fail-open is the default.** The gateway is a separate service, and with fail-closed any outage, deploy or slow response takes your whole chat feature down with it. Fail-open keeps the app available and logs a warning for every unscreened prompt, so the gap is visible and can be alerted on. Choose `FailClosed` when an unscreened prompt is worse than downtime, e.g. when the LLM has tools that act on real systems or access to sensitive data. Fail-closed returns 503 rather than 403 so clients and dashboards can tell "security check unavailable" apart from "prompt rejected".
+**Fail-closed is the default.** Gateway timeout, unreachable service, 401/403, malformed response or undefined verdict stops the protected operation. Unextractable payloads also stop. Only an explicit `FailMode: FailOpen` allows unscreened requests as a legacy availability tradeoff, with warnings. It never overrides a block verdict, caller cancellation, stream read failure or oversized body. Fail-closed uses 503 rather than 403 to distinguish screening unavailable from content denied. An allow verdict is text screening, never authorization to execute an agent tool.
 
 **Prompts are never logged.** Prompts often contain personal data, credentials and confidential documents, and logs are copied to more places, kept longer and read by more people than the data they describe. Each check logs only the verdict, layer, score, latencies, source, prompt length and SHA-256 of the prompt. That is enough to count blocks, spot repeated attack payloads (same hash) and correlate with the gateway's own log, which records the same hash, without storing the text. Gateway response bodies are not logged either. Tests assert that a distinctive prompt never appears in any log output.
 
@@ -151,13 +153,13 @@ LLMGUARD_API_KEY=<key> dotnet run -c Release --project benchmarks/LlmGuard.Overh
 ```bash
 cd dotnet
 dotnet build LlmGuard.sln
-dotnet test LlmGuard.sln                    # 60 tests, no gateway needed
+dotnet test LlmGuard.sln                    # in-memory tests, no gateway needed
 dotnet pack src/LlmGuard -c Release -o artifacts
 ```
 
 The tests use a fake gateway (a custom `HttpMessageHandler`) and need no network:
 - **Client:** allow, block, timeouts and connection errors under each `FailMode`, ten kinds of malformed reply, HTTP errors, caller cancellation, and log privacy.
-- **Handler:** multi-message and content-part payloads, tool messages screened as `rag`, pass-through cases, and concurrency.
+- **Handler:** multi-message and text-part payloads, tool messages screened as `rag`, strict extraction, size/cancellation/error boundaries, legacy opt-in, and concurrency.
 - **Middleware:** tested on a minimal test host.
 - **Sample:** tested end to end with `WebApplicationFactory`.
 
@@ -165,7 +167,17 @@ The projects target `net8.0` with C# 12 pinned in `Directory.Build.props`, so th
 
 ## Limitations
 
-- The middleware screens one JSON string field. Prompts in form posts, query strings, multipart bodies or several fields aren't screened, so protect routes whose prompt lives in a known JSON field, or use the handler.
+### Exact protected boundary and schemas
+
+- Incoming middleware covers `POST`, `PUT`, `PATCH` under configured path prefixes (segment-aware); default routes are empty. Install `UseLlmGuard()` before endpoint execution. Other paths and methods remain unaffected. The only required security field is the configured exact-case JSON string path, default `prompt`, optionally nested as `input.text`. Other fields are not screened by this middleware; use the outgoing handler to screen conversation history.
+- Outgoing screening covers `POST`, `PUT`, `PATCH` on clients explicitly registered with `AddLlmGuardHandler()`. Use a dedicated LLM client: unrelated mutating HTTP traffic on that same client will be rejected if it lacks a supported schema. Other methods (such as `GET /models`) pass through. Unregistered clients, direct SDK calls and actual tool execution are not intercepted.
+- Both boundaries require `application/json` or a `+json` media type with UTF-8 (or omitted charset); absent/unsupported types and content encodings fail inspection. JSON duplicate property names, including case variants, are rejected to avoid inconsistent downstream parsing. Empty/whitespace required text is rejected. Bodies are bounded before format decisions, including legacy mode. Incoming bodies are rewound; outgoing buffered bytes and content headers are retained for forwarding.
+- Outgoing supports a nonempty top-level `prompt` string and/or a nonempty `messages` array. Every message requires a supported role (`system`, `developer`, `user`, `assistant`, `tool`, `function`) and nonempty `content`: a string, or a flat array exclusively of `{ "type": "text", "text": "..." }` parts. Parts are joined with newlines. `tool` and `function` result text keeps `source: rag`; other roles use `source: user`. All messages are parsed before checking, all checks finish before any forwarding, and one block stops the complete request.
+- Images, audio, nested arrays/objects, Responses-style top-level `input`, null/empty content, unsupported roles, and message `tool_calls`/`function_call` structures are unsupported and fail inspection. Mixed text/image arrays that previously screened text and silently skipped images now fail safely. Top-level model/sampling metadata is retained, not interpreted as arbitrary prompt text. This is not a general parser for all providers and does not authorize tool calls.
+- Existing users must migrate from the old default FailOpen and silent extraction pass-through. The two-argument manually constructed handler remains supported with safe default options; use the three-argument overload with `IOptions<LlmGuardOptions>` to customize its size/legacy behavior. DI uses configured options. New fixed reason codes include `MissingContent`, `UnsupportedFormat`, `InvalidJson`, `UnexpectedContentType`, `OversizedPayload`, `ExtractionFailure`.
+- Caller cancellation propagates without forwarding or retries. Oversize/read errors remain closed even in legacy mode because a truncated/partially consumed stream cannot be forwarded safely. Logs contain metadata and reason codes, never request bodies, credentials or exception messages. Hashes permit correlation and guessing of predictable prompts; restrict retention and access.
+
+- The middleware screens one JSON string field. Form posts, query-string prompts and multipart bodies are unsupported on protected routes and fail closed by default; several other JSON fields are not automatically screened.
 - The handler re-screens the full conversation on every turn, so long histories cost one gateway call per message per request. Calls are concurrent, but they still count against the gateway's capacity. Caching allowed verdicts by hash would avoid repeat checks.
 - Using both the middleware and the handler, as the sample does, screens the newest prompt twice. That's intentional defense in depth, but it doubles the cost for that message.
 - Detection quality is the gateway's: see the main README for what the classifier catches and misses (notably non-English attacks).
