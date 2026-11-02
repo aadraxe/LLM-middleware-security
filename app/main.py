@@ -1,7 +1,10 @@
-from fastapi import FastAPI
-from datetime import datetime
+from fastapi import Depends, FastAPI, HTTPException
+from datetime import datetime, timezone
+import hashlib
 import json
 import os
+import time
+from uuid import uuid4
 
 try:
     # Pick up GROQ_API_KEY / CLASSIFIER_BACKEND from a local .env if present
@@ -43,6 +46,24 @@ def log_event(event: dict):
         f.write(json.dumps(event) + "\n")
 
 
+def log_security_event(endpoint, text, verdict, latency_ms, *, layer=None,
+                       score=None, source="user", error_category=None, request_id=None):
+    """Only metadata: never accept detector explanations or exception text."""
+    log_event({
+        "request_id": request_id or str(uuid4()),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "endpoint": endpoint,
+        "source": source,
+        "text_length": len(text),
+        "text_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        "verdict": verdict,
+        "layer": layer,
+        "score": score,
+        "latency_ms": latency_ms,
+        "error_category": error_category,
+    })
+
+
 @app.get("/")
 def root():
     return {
@@ -52,24 +73,28 @@ def root():
     }
 
 
-@app.post("/secure-chat", response_model=ChatResponse)
+@app.post("/secure-chat", response_model=ChatResponse,
+          dependencies=[Depends(check_api.require_api_key)],
+          description="Requires X-API-Key matching GATEWAY_API_KEYS. Authenticates the client, not an end user.")
 def secure_chat(request: ChatRequest):
-    result = get_pipeline().analyze(
-        request.prompt,
-        conversation_history=request.conversation_history,
-    )
+    start = time.perf_counter()
+    request_id = str(uuid4())
+    try:
+        result = get_pipeline().analyze(
+            request.prompt,
+            conversation_history=request.conversation_history,
+        )
+        layer = check_api.decision_layer(result)
+    except Exception:
+        log_security_event("/secure-chat", request.prompt, "error",
+                           round((time.perf_counter() - start) * 1000, 2),
+                           error_category="analysis_error", request_id=request_id)
+        raise HTTPException(status_code=503, detail="Security analysis unavailable") from None
 
-    event = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "prompt": request.prompt,
-        "allowed": result.allowed,
-        "risk_score": result.risk_score,
-        "primary_threat": result.primary_threat,
-        "blocking_detector": result.blocking_detector,
-        "triggered_rules": result.triggered_rules,
-        "detector_results": result.detector_results,
-    }
-    log_event(event)
+    log_security_event("/secure-chat", request.prompt,
+                       "allow" if result.allowed else "block",
+                       round((time.perf_counter() - start) * 1000, 2),
+                       layer=layer, score=float(result.risk_score), request_id=request_id)
 
     if not result.allowed:
         return ChatResponse(
@@ -83,7 +108,13 @@ def secure_chat(request: ChatRequest):
             message=f"Request blocked. Detected threat: {result.primary_threat}",
         )
 
-    llm_response = call_llm(request.prompt)
+    try:
+        llm_response = call_llm(request.prompt)
+    except Exception:
+        log_security_event("/secure-chat", request.prompt, "error",
+                           round((time.perf_counter() - start) * 1000, 2),
+                           error_category="provider_error", request_id=request_id)
+        raise HTTPException(status_code=502, detail="Generation unavailable") from None
 
     return ChatResponse(
         allowed=True,

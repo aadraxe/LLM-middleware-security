@@ -199,6 +199,21 @@ PIPELINE_MODE=cascade
 
 ## Usage
 
+Both `POST /secure-chat` and `POST /v1/check` require one `X-API-Key`
+header matching a key in the comma-separated `GATEWAY_API_KEYS` environment
+variable. Missing, invalid, duplicate credentials or absent key configuration
+return 401 with `WWW-Authenticate: ApiKey`. Configure keys through your local
+environment or uncommitted `.env`; API keys identify clients, not end users.
+
+Security events are JSONL metadata only: request ID, UTC timestamp, endpoint,
+source, text length/SHA-256, verdict, layer, score, latency and error category.
+Chat logs no longer contain prompts, history, detector explanations or full
+detector responses. Consumers of the previous chat log fields must migrate.
+Deterministic hashes permit correlation and guesses of predictable prompts;
+they are not anonymization. Restrict log access and retention. Existing logs
+are not scrubbed automatically. Analysis errors return a sanitized 503 without
+generation; unexpected generation exceptions return a sanitized 502.
+
 ```bash
 uvicorn app.main:app --reload            # open http://127.0.0.1:8000/docs
 pytest tests/ -v

@@ -1,6 +1,6 @@
 """
 Tests for POST /v1/check: API-key auth, the response contract, layer mapping,
-privacy of the event log, and that /secure-chat is unaffected.
+privacy of the event log, and authenticated /secure-chat compatibility.
 A stub pipeline is used, so no model or API calls are needed.
 """
 
@@ -130,10 +130,120 @@ def test_event_log_has_hash_not_text(client):
 
 # ── /secure-chat unchanged ─────────────────────────────────────────────
 
-def test_secure_chat_needs_no_api_key(client, monkeypatch):
+def test_secure_chat_with_api_key(client, monkeypatch):
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
-    r = client.post("/secure-chat", json={"prompt": "What is the capital of France?"})
+    r = client.post("/secure-chat", json={"prompt": "What is the capital of France?"},
+                    headers={"X-API-Key": KEY})
     assert r.status_code == 200 and r.json()["allowed"] is True
+
+
+@pytest.mark.parametrize("endpoint, body", [
+    ("/secure-chat", {"prompt": "synthetic prompt", "roles": ["admin"]}),
+    ("/v1/check", {"text": "synthetic prompt"}),
+])
+@pytest.mark.parametrize("headers", [
+    {}, {"X-API-Key": "incorrect"}, {"X-API-Key": ""},
+    {"X-API-Key": "Bearer test-key-123"}, {"X-API-Key": "test-key-123,other-key"},
+    [("X-API-Key", KEY), ("X-API-Key", "incorrect")],
+    [("X-API-Key", KEY), ("X-API-Key", KEY)],
+])
+def test_auth_rejection_has_no_analysis_or_generation(client, monkeypatch, endpoint, body, headers):
+    generated = []
+    monkeypatch.setattr(main, "call_llm", lambda text: generated.append(text))
+    r = client.post(endpoint, json=body, headers=headers)
+    assert r.status_code == 401
+    assert r.headers["WWW-Authenticate"] == "ApiKey"
+    assert client.stub.seen == [] and generated == []
+    assert not client.log_path.exists()
+
+
+@pytest.mark.parametrize("configured", [None, "", " , , "])
+def test_secure_chat_without_key_configuration(client, monkeypatch, configured):
+    if configured is None:
+        monkeypatch.delenv("GATEWAY_API_KEYS")
+    else:
+        monkeypatch.setenv("GATEWAY_API_KEYS", configured)
+    generated = []
+    monkeypatch.setattr(main, "call_llm", lambda text: generated.append(text))
+    assert client.post("/secure-chat", json={"prompt": "hello"},
+                       headers={"X-API-Key": KEY}).status_code == 401
+    assert client.stub.seen == [] and generated == []
+
+
+@pytest.mark.parametrize("allowed", [True, False])
+def test_chat_audit_metadata_is_private(client, monkeypatch, caplog, capsys, allowed):
+    import hashlib
+    from datetime import datetime
+    from uuid import UUID
+
+    prompt, history = "synthetic-secret-prompt-829", "synthetic-history-secret-417"
+    provider_key = "synthetic-provider-credential-914"
+    monkeypatch.setenv("GROQ_API_KEY", provider_key)
+    result = tiered_result(allowed, "finetuned_classifier", 0.1 if allowed else 0.99)
+    result.triggered_rules = [prompt, history, KEY, provider_key]
+    result.detector_results["TieredPipeline"]["reason"] = prompt + history + KEY + provider_key
+    seen = []
+    monkeypatch.setattr(client.stub, "analyze", lambda text, conversation_history=None: result)
+    monkeypatch.setattr(main, "call_llm", lambda text: seen.append(text) or "synthetic reply")
+    r = client.post("/secure-chat", json={"prompt": prompt, "conversation_history": [history]},
+                    headers={"X-API-Key": KEY})
+    assert r.status_code == 200 and r.json()["allowed"] is allowed
+    assert seen == ([prompt] if allowed else [])
+    log_text = client.log_path.read_text(encoding="utf-8")
+    captured = capsys.readouterr()
+    for secret in (prompt, history, KEY, provider_key):
+        assert secret not in log_text + caplog.text + captured.out + captured.err
+    event = json.loads(log_text)
+    assert set(event) == {"request_id", "timestamp", "endpoint", "source", "text_length",
+                          "text_sha256", "verdict", "layer", "score", "latency_ms", "error_category"}
+    UUID(event["request_id"])
+    assert datetime.fromisoformat(event["timestamp"]).utcoffset().total_seconds() == 0
+    assert event["endpoint"] == "/secure-chat" and event["source"] == "user"
+    assert event["verdict"] == ("allow" if allowed else "block")
+    assert event["text_length"] == len(prompt)
+    assert event["text_sha256"] == hashlib.sha256(prompt.encode()).hexdigest()
+    assert event["layer"] == "classifier" and event["score"] == result.risk_score
+    assert event["latency_ms"] >= 0 and event["error_category"] is None
+
+
+@pytest.mark.parametrize("endpoint, stage, status, category", [
+    ("/secure-chat", "analysis", 503, "analysis_error"),
+    ("/v1/check", "analysis", 503, "analysis_error"),
+    ("/secure-chat", "provider", 502, "provider_error"),
+])
+def test_unexpected_errors_are_sanitized(client, monkeypatch, caplog, capsys,
+                                        endpoint, stage, status, category):
+    secret = "synthetic-error-history-prompt-817"
+    def fail(*args, **kwargs):
+        raise RuntimeError(secret + KEY)
+    generated = []
+    if stage == "analysis":
+        monkeypatch.setattr(client.stub, "analyze", fail)
+        monkeypatch.setattr(main, "call_llm", lambda text: generated.append(text))
+    else:
+        monkeypatch.setattr(main, "call_llm", fail)
+    body = {"prompt": secret, "conversation_history": [secret]} if endpoint == "/secure-chat" else {"text": secret}
+    r = client.post(endpoint, json=body, headers={"X-API-Key": KEY})
+    assert r.status_code == status
+    logs = client.log_path.read_text(encoding="utf-8")
+    captured = capsys.readouterr()
+    combined = logs + caplog.text + captured.out + captured.err + r.text
+    assert secret not in combined and KEY not in combined
+    assert json.loads(logs.splitlines()[-1])["error_category"] == category
+    if stage == "provider":
+        events = [json.loads(line) for line in logs.splitlines()]
+        assert len(events) == 2 and events[0]["verdict"] == "allow"
+        assert events[0]["request_id"] == events[1]["request_id"]
+    assert generated == []
+
+
+def test_chat_request_ids_are_unique(client, monkeypatch):
+    monkeypatch.setattr(main, "call_llm", lambda text: "reply")
+    for _ in range(2):
+        assert client.post("/secure-chat", json={"prompt": "hello"},
+                           headers={"X-API-Key": KEY}).status_code == 200
+    events = [json.loads(line) for line in client.log_path.read_text().splitlines()]
+    assert events[0]["request_id"] != events[1]["request_id"]
 
 
 # ── layer mapping ──────────────────────────────────────────────────────

@@ -34,5 +34,5 @@ def call_llm(prompt: str) -> str:
         )
         data = response.json()
         return data["choices"][0]["message"]["content"]
-    except Exception as e:
-        return f"[LLM error: {str(e)}]"
+    except Exception:
+        return "[LLM error: generation unavailable]"
