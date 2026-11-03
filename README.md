@@ -199,6 +199,33 @@ PIPELINE_MODE=cascade
 
 ## Usage
 
+Phase 2B also provides an isolated **local MCP test server** using the official
+`mcp==2.3.0` SDK (`requirements-mcp.txt`). It exposes only `get_order`,
+`send_email` and `issue_refund`, backed by synthetic in-memory support tools.
+Every supported `tools/call` delegates to the existing `ProtectedExecutor`;
+discovery is not authorization. See [the Phase 2B report](docs/AEGISFLOW_PHASE2B_REPORT.md)
+for composition, tests and limits.
+
+Trusted harness code supplies the executor and typed context outside MCP input:
+
+```python
+from mcp import Client
+from app.mcp.server import create_local_protected_server
+
+# executor and trusted_context are supplied by trusted host code, never the agent.
+server = create_local_protected_server(executor, trusted_context)
+# Inside an async harness: real initialize/initialized and JSON-RPC memory streams.
+async with Client(server, mode="legacy", cache=None) as client:
+    result = await client.call_tool("get_order", {"order_id": "order-a"})
+```
+
+No HTTP endpoint or listener is added. The fixed local context is **not production
+authentication**; each distinct local principal/session needs its own server
+binding. Do not expose this binding publicly. Future HTTP serving must verify
+credentials and derive per-session principal/tenant/roles from trusted claims.
+In-memory tests do not exercise HTTP/OAuth authentication. No real email or
+payment operation occurs, and same-process malicious Python is outside scope.
+
 Both `POST /secure-chat` and `POST /v1/check` require one `X-API-Key`
 header matching a key in the comma-separated `GATEWAY_API_KEYS` environment
 variable. Missing, invalid, duplicate credentials or absent key configuration
