@@ -1,15 +1,26 @@
 """The sole dispatch boundary for registered tools in this local milestone."""
 import asyncio
+from contextlib import AbstractAsyncContextManager, AbstractContextManager, nullcontext
 from datetime import datetime, timezone
 import math
 import time
 from uuid import uuid4
+from typing import Protocol
+from pydantic import JsonValue
 
 from .audit import AuthorizationAuditEvent, AuthorizationAuditSink
 from .policy import PolicyDecisionPoint
 from .registry import ToolRegistry
 from .schemas import (AuthorizationDecision, AuthorizationRequest, ExecutionResult,
-                      EmailArguments, ToolInvocation, TrustedContext, canonical_json, request_digest)
+                      EmailArguments, ToolInvocation, TrustedContext, TrustedPrincipal, canonical_json, request_digest)
+
+
+class ExecutionFlowGuard(Protocol):
+    """Trusted extension; never selected or configured by a tool invocation."""
+    def session(self, principal: TrustedPrincipal) -> AbstractAsyncContextManager: ...
+    def dispatch_context(self) -> AbstractContextManager: ...
+    def before_dispatch(self, request: AuthorizationRequest) -> str | None: ...
+    def after_execution(self, request: AuthorizationRequest, output: JsonValue) -> JsonValue: ...
 
 
 def _raise_if_cancelled():
@@ -20,13 +31,27 @@ def _raise_if_cancelled():
 
 class ProtectedExecutor:
     def __init__(self, registry: ToolRegistry, policy: PolicyDecisionPoint,
-                 audit: AuthorizationAuditSink, *, policy_version: str, policy_timeout_seconds: float = 1.0):
+                 audit: AuthorizationAuditSink, *, policy_version: str, policy_timeout_seconds: float = 1.0,
+                 flow_guard: ExecutionFlowGuard | None = None):
         if not math.isfinite(policy_timeout_seconds) or not 0 < policy_timeout_seconds <= 60:
             raise ValueError("policy timeout must be positive, finite and at most 60 seconds")
         self._registry, self._policy, self._audit = registry, policy, audit
         self._policy_version, self._timeout = policy_version, policy_timeout_seconds
+        self._flow_guard = flow_guard
 
     async def execute_authorized(self, invocation: ToolInvocation, trusted_context: TrustedContext | None) -> ExecutionResult:
+        # Optional trusted composition. The same guard/store must cover every
+        # executor serving this session; the MCP adapter cannot select or skip it.
+        if self._flow_guard is None or not isinstance(trusted_context, TrustedContext):
+            return await self._execute(invocation, trusted_context)
+        try:
+            context = TrustedContext.model_validate(trusted_context)
+        except Exception:
+            return await self._execute(invocation, trusted_context)
+        async with self._flow_guard.session(context.principal):
+            return await self._execute(invocation, context)
+
+    async def _execute(self, invocation, trusted_context):
         _raise_if_cancelled()
         request_id, evaluation_latency_ms = uuid4(), 0.0
         principal, entry, decision = None, None, None
@@ -115,22 +140,42 @@ class ProtectedExecutor:
                                    status="ERROR", reason_code="AUDIT_UNAVAILABLE")
         # No external grant/token is accepted. Only this invocation's private
         # validated snapshot reaches the resolved trusted callable.
-        _raise_if_cancelled()
-        try:
-            output = entry.executor(execution_arguments)
-            completed = ExecutionResult(request_id=request_id, decision_id=decision.decision_id,
-                                        status="EXECUTED", reason_code="AUTHORIZED", output=output)
-        except Exception:
+        with self._flow_guard.dispatch_context() if self._flow_guard is not None else nullcontext():
+            _raise_if_cancelled()
+            if self._flow_guard is not None:
+                try:
+                    reason = self._flow_guard.before_dispatch(request)
+                except Exception:
+                    reason = "PROVENANCE_UNAVAILABLE"
+                if reason is not None:
+                    return reject(reason)
+            _raise_if_cancelled()
             try:
-                self._audit.record(event("ALLOW", "EXECUTION_FAILED", "FAILED"))
+                output = entry.executor(execution_arguments)
+                if self._flow_guard is not None:
+                    try:
+                        output = self._flow_guard.after_execution(request, output)
+                    except Exception:
+                        # Retrieval may already have run, but no output is released.
+                        try:
+                            self._audit.record(event("ALLOW", "PROVENANCE_UNAVAILABLE", "FAILED"))
+                        except Exception:
+                            pass
+                        return ExecutionResult(request_id=request_id, decision_id=decision.decision_id,
+                                               status="ERROR", reason_code="PROVENANCE_UNAVAILABLE")
+                completed = ExecutionResult(request_id=request_id, decision_id=decision.decision_id,
+                                            status="EXECUTED", reason_code="AUTHORIZED", output=output)
             except Exception:
-                pass  # Required pre-execution event already succeeded; no retry.
-            return ExecutionResult(request_id=request_id, decision_id=decision.decision_id,
-                                   status="ERROR", reason_code="EXECUTION_FAILED")
-        try:
-            self._audit.record(event("ALLOW", "AUTHORIZED", "EXECUTED"))
-        except Exception:
-            # A completed operation cannot be undone by failing its completion log.
-            return ExecutionResult(request_id=request_id, decision_id=decision.decision_id,
-                                   status="EXECUTED_AUDIT_FAILED", reason_code="AUDIT_UNAVAILABLE")
-        return completed
+                try:
+                    self._audit.record(event("ALLOW", "EXECUTION_FAILED", "FAILED"))
+                except Exception:
+                    pass  # Required pre-execution event already succeeded; no retry.
+                return ExecutionResult(request_id=request_id, decision_id=decision.decision_id,
+                                       status="ERROR", reason_code="EXECUTION_FAILED")
+            try:
+                self._audit.record(event("ALLOW", "AUTHORIZED", "EXECUTED"))
+            except Exception:
+                # A completed operation cannot be undone by failing its completion log.
+                return ExecutionResult(request_id=request_id, decision_id=decision.decision_id,
+                                       status="EXECUTED_AUDIT_FAILED", reason_code="AUDIT_UNAVAILABLE")
+            return completed

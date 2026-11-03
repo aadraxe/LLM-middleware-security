@@ -226,6 +226,40 @@ credentials and derive per-session principal/tenant/roles from trusted claims.
 In-memory tests do not exercise HTTP/OAuth authentication. No real email or
 payment operation occurs, and same-process malicious Python is outside scope.
 
+Phase 3A adds optional **trusted provenance and session exposure enforcement**.
+Compose every executor for the experiment with the same `ArtifactStore` and
+`ProvenanceGuard`; the MCP handlers stay unchanged and cannot choose the guard.
+Existing executors without this extension retain Phase 2A behavior.
+
+```python
+from app.authorization.executor import ProtectedExecutor
+from app.provenance.store import ArtifactStore
+from app.provenance.flow_policy import FlowPolicy
+from app.provenance.models import Sensitivity
+from app.provenance.tracker import ProvenanceGuard, InMemoryFlowAuditSink
+
+# registry, ordinary_policy, auth_audit and trusted_context come from the host.
+store = ArtifactStore()
+# Only a trusted harness may attest a newly created session as known clean.
+# Omit known_clean=True for unknown exposure (outbound email then denies).
+store.register_session(trusted_context.principal, known_clean=True)
+flow = FlowPolicy({("tenant-a", "support@example.test"): {Sensitivity.PUBLIC, Sensitivity.INTERNAL}})
+executor = ProtectedExecutor(registry, ordinary_policy, auth_audit, policy_version="v1",
+    flow_guard=ProvenanceGuard(store, flow, InMemoryFlowAuditSink()))
+server = create_local_protected_server(executor, trusted_context)
+```
+
+An authorized `get_order` on this boundary returns `output.data` and a server-issued
+`output.artifact_id`, and marks that tenant/session as exposed to CONFIDENTIAL
+data before releasing the result. Artifact references confer no permission.
+The same session's otherwise permitted email then denies unless exact trusted
+destination configuration explicitly permits that sensitivity. Unknown exposure
+always denies. `issue_refund` keeps its original authorization/approval rules.
+This tracks source metadata and conservative session exposure; it cannot identify
+confidential spans or paraphrases in arbitrary text. Harmless emails can be blocked
+after retrieval. No declassification, production authentication or persistent
+database is provided. See [the Phase 3A report](docs/AEGISFLOW_PHASE3A_REPORT.md).
+
 Both `POST /secure-chat` and `POST /v1/check` require one `X-API-Key`
 header matching a key in the comma-separated `GATEWAY_API_KEYS` environment
 variable. Missing, invalid, duplicate credentials or absent key configuration
