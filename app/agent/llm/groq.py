@@ -10,6 +10,7 @@ import httpx
 from pydantic import Field, SecretStr
 from app.authorization.schemas import StrictModel, canonical_json
 from .contracts import Decision, PlannerRequest, ToolCall, json_object
+from .usage import ProviderExchange, read_usage
 
 
 class GroqConfig(StrictModel):
@@ -27,6 +28,17 @@ class GroqPlanner:
         if not self._config.api_key.get_secret_value().strip():
             raise ValueError("provider credential required")
         self._transport = transport  # Trusted test injection; never model-selected.
+        self._exchanges = []
+
+    @property
+    def exchanges(self):
+        """Immutable metadata snapshots; no keys, prompts or response text."""
+        return tuple(self._exchanges)
+
+    @property
+    def uses_default_transport(self):
+        """Injected test transports must never be reported as live evidence."""
+        return self._transport is None
 
     async def propose(self, request: PlannerRequest) -> Decision:
         request = PlannerRequest.model_validate(request)
@@ -44,9 +56,11 @@ class GroqPlanner:
         encoded = canonical_json(body).encode()
         if len(encoded) > 131072:
             raise ValueError("provider request limit")
+        attempted, usage = False, None
         try:
             async with httpx.AsyncClient(timeout=self._config.timeout_seconds, follow_redirects=False,
                                          trust_env=False, transport=self._transport) as client:
+                attempted = True
                 async with client.stream("POST", "https://api.groq.com/openai/v1/chat/completions",
                     headers={"Authorization": "Bearer " + self._config.api_key.get_secret_value(), "Content-Type": "application/json"},
                     content=encoded) as response:
@@ -57,6 +71,7 @@ class GroqPlanner:
                         if len(content) > 65536:
                             raise ValueError("provider response limit")
             data = json_object(content)
+            usage = read_usage(data.get("usage"))
             choices = data["choices"]
             if not isinstance(choices, list) or len(choices) != 1:
                 raise ValueError("single completion required")
@@ -80,3 +95,5 @@ class GroqPlanner:
         except Exception:
             # No raw provider bodies, credentials or exception chaining escape.
             raise RuntimeError("planner unavailable") from None
+        finally:
+            self._exchanges.append(ProviderExchange(request_attempted=attempted, usage=usage))

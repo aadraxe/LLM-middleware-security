@@ -292,6 +292,30 @@ can propose actions but cannot grant approval, select identity or reset exposure
 See [the Phase 3C report](docs/AEGISFLOW_PHASE3C_REPORT.md) for bounds, trust
 handling, provider contract references and limitations.
 
+Phase 3D provides a separate controlled real-model harness. Its default is a
+credential-free dry-run that shows the ten synthetic scenarios and call limits:
+
+```powershell
+venv/Scripts/python.exe -B -m app.agent.llm.live --dry-run
+```
+
+**Only after separate supervisor approval**, an operator can run a small live
+pilot from an interactive terminal:
+
+```powershell
+venv/Scripts/python.exe -B -m app.agent.llm.live --live --provider groq --scenario order_lookup --max-model-calls 2
+```
+
+Live mode requires the exact confirmation phrase shown by the CLI, then a hidden
+API-key prompt. Never put keys in command arguments, files, transcripts or reports;
+the harness does not load environment credentials. Synthetic prompts and tool
+outputs leave the machine for Groq, and requests may incur charges. All tools
+remain fake. There are no automatic retries; interrupted/uncertain runs require
+operator review. Reports are written to ignored `.agent-results/phase3d/<run_id>/`.
+No live evaluation was performed during implementation. See
+[the Phase 3D report](docs/AEGISFLOW_PHASE3D_REPORT.md) for scoring limits, usage
+coverage, safe operation and the explicit **NOT RUN** live-results status.
+
 Both `POST /secure-chat` and `POST /v1/check` require one `X-API-Key`
 header matching a key in the comma-separated `GATEWAY_API_KEYS` environment
 variable. Missing, invalid, duplicate credentials or absent key configuration
