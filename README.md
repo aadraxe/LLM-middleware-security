@@ -260,6 +260,23 @@ confidential spans or paraphrases in arbitrary text. Harmless emails can be bloc
 after retrieval. No declassification, production authentication or persistent
 database is provided. See [the Phase 3A report](docs/AEGISFLOW_PHASE3A_REPORT.md).
 
+Run the Phase 3B deterministic local workflow evaluation with the existing Python
+environment and optional MCP requirements installed:
+
+```powershell
+venv/Scripts/python.exe -B -m app.agent.evaluate
+# Explicit synthetic test-only comparison lacking authorization rules:
+venv/Scripts/python.exe -B -m app.agent.evaluate --include-unsafe-test-baseline
+```
+
+The default compares authorization-only with authorization plus provenance over
+12 scripted scenarios. The protected application factory always enables
+provenance. JSON and CSV traces, counts, rates and measured timings are written
+to ignored `.agent-results/phase3b/`. The unsafe comparison requires the explicit
+host CLI flag and uses only in-memory synthetic effects. No LLM planning or real
+customer services are involved. See [the Phase 3B report](docs/AEGISFLOW_PHASE3B_REPORT.md)
+for ground truth, denominators, latency definitions and conservative overblocking.
+
 Both `POST /secure-chat` and `POST /v1/check` require one `X-API-Key`
 header matching a key in the comma-separated `GATEWAY_API_KEYS` environment
 variable. Missing, invalid, duplicate credentials or absent key configuration

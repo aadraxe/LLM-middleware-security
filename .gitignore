@@ -43,6 +43,7 @@ Thumbs.db
 # =========================
 .pytest_cache/
 .test-tmp/
+.agent-results/
 .coverage
 htmlcov/
 
