@@ -337,6 +337,24 @@ credential-free dry-run remain available. See the
 [live evaluation report](docs/AEGISFLOW_LIVE_EVALUATION_REPORT.md) for actual
 results, the rate-limit stop and unresolved FINAL intent.
 
+Phase 3E guards the outward `run_customer_task` final answer with explicit trusted
+local recipient identity and shared session provenance. Missing recipients,
+unknown provenance and disallowed sensitivity return a fixed safe replacement;
+tool execution remains recorded independently. The default local `public-viewer`
+fixture permits PUBLIC/INTERNAL in its own tenant, never CONFIDENTIAL. Host code
+must not construct recipient identity from customer or model text. The raw
+`run_agent` loop and historical evaluators are internal experiment machinery,
+not external response APIs.
+
+```powershell
+venv/Scripts/python.exe -B -m app.output_security.evaluate
+```
+
+This separate mock-only experiment writes metadata under ignored
+`.agent-results/phase3e/<run_id>/`. It reads no credentials and makes no provider
+requests. See [the Phase 3E report](docs/AEGISFLOW_PHASE3E_REPORT.md) for recipient
+assumptions, conservative overblocking, local handoff semantics and results.
+
 Both `POST /secure-chat` and `POST /v1/check` require one `X-API-Key`
 header matching a key in the comma-separated `GATEWAY_API_KEYS` environment
 variable. Missing, invalid, duplicate credentials or absent key configuration

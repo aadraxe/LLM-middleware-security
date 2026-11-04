@@ -99,6 +99,15 @@ class LocalApplication:
         self.contexts = []
 
     def connect(self, actor: Actor):
+        connection, samples, _context = self.connect_bound(actor)
+        return connection, samples
+
+    def connect_bound(self, actor: Actor):
+        """Host-only bundle; bind output checks to this exact MCP context.
+
+        Returning the context directly avoids consulting a shared mutable
+        last-context list when different threads connect concurrently.
+        """
         if not isinstance(actor, Actor):
             raise TypeError("trusted actor fixture required")
         actor = Actor.model_validate(actor)
@@ -110,7 +119,7 @@ class LocalApplication:
         executor = _MeasuredExecutor(self._registry, _MeasuredPolicy(self._policy), self.authorization_audit,
             policy_version="v1", flow_guard=self._guard)
         server = create_local_protected_server(executor, context)
-        return Client(server, mode="legacy", cache=None), executor.samples
+        return Client(server, mode="legacy", cache=None), executor.samples, context
 
     async def run(self, actor: Actor):
         """Execute a trusted fixture's plan with only an MCP client in the agent."""

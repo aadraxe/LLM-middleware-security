@@ -1,4 +1,8 @@
-"""Bounded model proposals -> protected MCP, with no alternate execution path."""
+"""Internal bounded planner loop; external answers require output_security.
+
+Historical evaluators use internal Outcome for metadata experiments. It is not
+an outward response contract. run_customer_task always applies final egress.
+"""
 import asyncio
 import hashlib
 import time
@@ -140,14 +144,13 @@ async def run_agent(client, planner: Planner, customer: str, samples: list, *, l
     return finish("STEP_LIMIT")
 
 
-async def run_customer_task(planner, customer, actor, *, limits=None):
-    """Host-only entry point: safe factory, fresh context, no selectable bypass."""
+async def run_customer_task(planner, customer, actor, *, limits=None, recipient=None):
+    """Outward host entry point; missing trusted recipient fails output closed."""
     from app.agent.composition import create_application
+    from app.output_security.session import run_protected_agent
     try:
         application = create_application()
-        connection, samples = application.connect(actor)
-        async with connection as client:
-            return await run_agent(client, planner, customer, samples, limits=limits)
+        return await run_protected_agent(application, actor, planner, customer, recipient, limits=limits)
     except Exception:
         # Do not invent zero-execution metrics for an uncertain session failure.
         # Caller cancellation propagates and no retry/new session is attempted.
