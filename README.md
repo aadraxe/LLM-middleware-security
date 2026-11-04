@@ -277,6 +277,21 @@ host CLI flag and uses only in-memory synthetic effects. No LLM planning or real
 customer services are involved. See [the Phase 3B report](docs/AEGISFLOW_PHASE3B_REPORT.md)
 for ground truth, denominators, latency definitions and conservative overblocking.
 
+Run the separate Phase 3C structured mock-planner demonstration:
+
+```powershell
+venv/Scripts/python.exe -B -m app.agent.llm.evaluate
+```
+
+This discovers tools through MCP and exercises a bounded planning loop using the
+provenance-enabled default factory. It writes metadata to ignored
+`.agent-results/phase3c/evaluation.json`; it selects no external provider. The
+optional Groq adapter requires explicit trusted configuration and credentials,
+is tested with HTTP fixtures only, and has not been evaluated live. Model output
+can propose actions but cannot grant approval, select identity or reset exposure.
+See [the Phase 3C report](docs/AEGISFLOW_PHASE3C_REPORT.md) for bounds, trust
+handling, provider contract references and limitations.
+
 Both `POST /secure-chat` and `POST /v1/check` require one `X-API-Key`
 header matching a key in the comma-separated `GATEWAY_API_KEYS` environment
 variable. Missing, invalid, duplicate credentials or absent key configuration
