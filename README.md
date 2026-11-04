@@ -321,6 +321,22 @@ No live evaluation was performed during implementation. See
 [the Phase 3D report](docs/AEGISFLOW_PHASE3D_REPORT.md) for scoring limits, usage
 coverage, safe operation and the explicit **NOT RUN** live-results status.
 
+For a separately approved autonomous synthetic experiment, the explicit local
+entry point can read only `GROQ_API_KEY` from a named credential file:
+
+```powershell
+venv/Scripts/python.exe -B -m app.agent.llm.authorized --approved-live --credential-file .env
+```
+
+This requires prior supervisor authorization; the flag records operator intent,
+not an authentication grant. It runs the fixed ten scenarios with a shared
+40-call cap, no retries and provider-failure/usage stops. It does not populate the
+process environment, interpolate variables or print/store the key. Keep the
+credential file private and ignored by Git. The original interactive CLI and
+credential-free dry-run remain available. See the
+[live evaluation report](docs/AEGISFLOW_LIVE_EVALUATION_REPORT.md) for actual
+results, the rate-limit stop and unresolved FINAL intent.
+
 Both `POST /secure-chat` and `POST /v1/check` require one `X-API-Key`
 header matching a key in the comma-separated `GATEWAY_API_KEYS` environment
 variable. Missing, invalid, duplicate credentials or absent key configuration
