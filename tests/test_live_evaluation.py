@@ -56,6 +56,7 @@ def test_dry_run_is_default_and_reads_no_credential_or_provider(monkeypatch, cap
     assert live.main(["--output", str(tmp_path / "unused")]) == 0
     result = json.loads(capsys.readouterr().out)
     assert result["provider"] is None and result["scenario_count"] == 10
+    assert result["model"] == MODEL == "openai/gpt-oss-120b"
     assert result["maximum_model_calls"] == 20 and result["limits"]["max_steps"] == 4
     assert result["live_model_run"] == "NOT RUN" and "incur charges" in result["notice"]
     assert not (tmp_path / "unused").exists()
@@ -73,6 +74,14 @@ def test_invalid_live_controls_are_rejected_without_echoing_arguments(arguments,
 def tty(monkeypatch):
     monkeypatch.setattr(live.sys.stdin, "isatty", lambda: True)
     monkeypatch.setattr(live.sys.stdout, "isatty", lambda: True)
+
+
+def test_deprecated_cli_model_is_rejected_before_credentials_or_provider(monkeypatch):
+    def forbidden(*a, **k): pytest.fail("credential/provider access")
+    monkeypatch.setattr(live, "GroqPlanner", forbidden)
+    monkeypatch.setattr(live.getpass, "getpass", forbidden)
+    monkeypatch.setattr(builtins, "input", forbidden)
+    assert live.main(["--live", "--provider", "groq", "--model", "llama-3.3-70b-versatile"]) == 2
 
 
 def test_noninteractive_live_mode_cannot_read_a_key(monkeypatch):

@@ -17,7 +17,7 @@ def request():
 
 
 def config():
-    return GroqConfig(enabled=True, model="llama-3.3-70b-versatile", api_key=SecretStr("synthetic-provider-key"))
+    return GroqConfig(enabled=True, model="openai/gpt-oss-120b", api_key=SecretStr("synthetic-provider-key"))
 
 
 def reply(*, tool=False):
@@ -38,6 +38,7 @@ def test_supported_structured_wire_format_and_role_separation(tool, caplog, caps
         assert req.headers["Authorization"] == "Bearer synthetic-provider-key"
         data = json.loads(req.content)
         seen.append(data)
+        assert data["model"] == "openai/gpt-oss-120b"
         assert data["parallel_tool_calls"] is False and data["tool_choice"] == "auto"
         assert data["tools"][0]["type"] == "function"
         assert [m["role"] for m in data["messages"]] == ["system", "user", "assistant", "tool"]
@@ -75,7 +76,7 @@ def test_malformed_unavailable_provider_responses_are_sanitized_and_never_retrie
 
 
 def test_no_provider_is_enabled_or_selected_implicitly():
-    with pytest.raises(ValidationError): GroqConfig(enabled=False, model="llama-3.3-70b-versatile", api_key=SecretStr("x"))
+    with pytest.raises(ValidationError): GroqConfig(enabled=False, model="openai/gpt-oss-120b", api_key=SecretStr("x"))
     with pytest.raises(ValidationError): GroqConfig(enabled=True, model="unknown-model", api_key=SecretStr("x"))
     with pytest.raises(TypeError): GroqPlanner({"enabled": True})
     with pytest.raises(ValueError): GroqPlanner(config().model_copy(update={"api_key": SecretStr("")}))
@@ -85,3 +86,8 @@ def test_provider_cancellation_is_not_sanitized_into_a_retry():
     async def handle(req): raise asyncio.CancelledError()
     planner = GroqPlanner(config(), transport=httpx.MockTransport(handle))
     with pytest.raises(asyncio.CancelledError): asyncio.run(planner.propose(request()))
+
+
+def test_deprecated_model_is_rejected_without_fallback():
+    with pytest.raises(ValidationError):
+        GroqConfig(enabled=True, model="llama-3.3-70b-versatile", api_key=SecretStr("synthetic-key"))

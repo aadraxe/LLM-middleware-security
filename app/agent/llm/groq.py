@@ -1,7 +1,7 @@
 """Explicit opt-in Groq Chat Completions adapter, using existing httpx only.
 
 Contract verified against console.groq.com/docs/tool-use/local-tool-calling,
-/docs/tool-use/overview and /docs/api-reference on 2026-11-03. No live call run.
+/docs/tool-use/overview and /docs/api-reference on 2026-11-04. No live call run.
 No environment key lookup, arbitrary URL, remote MCP, built-in tool or retry.
 """
 import asyncio
@@ -18,7 +18,7 @@ from .diagnostics import provider_error_hint
 class GroqConfig(StrictModel):
     enabled: Literal[True]
     api_key: SecretStr = Field(repr=False)
-    model: Literal["llama-3.3-70b-versatile"]
+    model: Literal["openai/gpt-oss-120b"]
     timeout_seconds: float = Field(default=10.0, gt=0, le=60, allow_inf_nan=False)
 
 

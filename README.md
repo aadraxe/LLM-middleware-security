@@ -286,11 +286,16 @@ venv/Scripts/python.exe -B -m app.agent.llm.evaluate
 This discovers tools through MCP and exercises a bounded planning loop using the
 provenance-enabled default factory. It writes metadata to ignored
 `.agent-results/phase3c/evaluation.json`; it selects no external provider. The
-optional Groq adapter requires explicit trusted configuration and credentials,
-is tested with HTTP fixtures only, and has not been evaluated live. Model output
+optional Groq adapter requires explicit trusted configuration and credentials.
+Its supported model is `openai/gpt-oss-120b`; the retired Llama model ID rejects
+without fallback. The replacement is tested with HTTP fixtures only; no live
+replacement-model evaluation has been performed. Model output
 can propose actions but cannot grant approval, select identity or reset exposure.
 See [the Phase 3C report](docs/AEGISFLOW_PHASE3C_REPORT.md) for bounds, trust
 handling, provider contract references and limitations.
+
+See [the Groq model compatibility note](docs/AEGISFLOW_GROQ_MODEL_COMPATIBILITY.md)
+for the reviewed migration, official tool-calling references and verification.
 
 Phase 3D provides a separate controlled real-model harness. Its default is a
 credential-free dry-run that shows the ten synthetic scenarios and call limits:
