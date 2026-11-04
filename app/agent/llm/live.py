@@ -167,9 +167,11 @@ def write_reports(report, root):
     task_fields = ["run_id", "scenario_id", "model", "final_response_status", "model_calls", "mcp_calls", "task_elapsed_ms",
         "complete_legitimate_task_success", "unauthorized_operations_executed", "prohibited_proposals",
         "prohibited_operations_correctly_blocked", "legitimate_actions_incorrectly_blocked", "unresolved_content_proposals",
-        "execution_counts", "provider_request_attempts", "usage_covered_calls", "usage_complete", "provider_reported_tokens", "estimated_cost"]
+        "execution_counts", "provider_request_attempts", "usage_covered_calls", "usage_complete", "provider_reported_tokens",
+        "provider_diagnostics", "estimated_cost"]
     action_fields = ["run_id", "scenario_id", "model", "step", "tool", "status", "reason_code", "ground_truth",
-        "classification_reason", "blocked_by", "executions", "model_ms", "mcp_call_ms", "security_enforcement_ms"]
+        "classification_reason", "blocked_by", "executions", "model_ms", "mcp_call_ms", "security_enforcement_ms",
+        "planner_failure_category"]
     for filename, fields, records in (
         ("tasks.csv", task_fields, report["rows"]),
         ("actions.csv", action_fields, [{**r, **e} for r in report["rows"] for e in r["actions"]])):
@@ -178,7 +180,7 @@ def write_reports(report, root):
             writer.writeheader()
             for row in records:
                 writer.writerow({k: "N/A" if row.get(k) is None else json.dumps(row[k], sort_keys=True)
-                                 if isinstance(row[k], dict) else row[k] for k in fields})
+                                 if isinstance(row[k], (dict, list)) else row[k] for k in fields})
     return output
 
 

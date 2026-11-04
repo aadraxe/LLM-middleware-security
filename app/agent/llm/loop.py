@@ -67,8 +67,13 @@ async def run_agent(client, planner: Planner, customer: str, samples: list, *, l
         model_calls += 1
         try:
             reply = await bounded(planner.propose(request), limits.model_timeout_seconds)
+        except TimeoutError:
+            event["model_ms"] = (time.perf_counter() - started) * 1000
+            event["planner_failure_category"] = "timeout"
+            return finish("MODEL_UNAVAILABLE")
         except Exception:
             event["model_ms"] = (time.perf_counter() - started) * 1000
+            event["planner_failure_category"] = "planner_error"
             return finish("MODEL_UNAVAILABLE")
         event["model_ms"] = (time.perf_counter() - started) * 1000
         try:

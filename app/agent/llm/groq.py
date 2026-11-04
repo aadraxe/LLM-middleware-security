@@ -4,6 +4,7 @@ Contract verified against console.groq.com/docs/tool-use/local-tool-calling,
 /docs/tool-use/overview and /docs/api-reference on 2026-11-03. No live call run.
 No environment key lookup, arbitrary URL, remote MCP, built-in tool or retry.
 """
+import asyncio
 from typing import Literal
 
 import httpx
@@ -11,6 +12,7 @@ from pydantic import Field, SecretStr
 from app.authorization.schemas import StrictModel, canonical_json
 from .contracts import Decision, PlannerRequest, ToolCall, json_object
 from .usage import ProviderExchange, read_usage
+from .diagnostics import provider_error_hint
 
 
 class GroqConfig(StrictModel):
@@ -41,37 +43,57 @@ class GroqPlanner:
         return self._transport is None
 
     async def propose(self, request: PlannerRequest) -> Decision:
-        request = PlannerRequest.model_validate(request)
-        messages = [{"role": "system", "content": request.instructions}, {"role": "user", "content": request.customer}]
-        for turn in request.turns:
-            messages.extend([
-                {"role": "assistant", "tool_calls": [{"id": turn.call.call_id, "type": "function",
-                  "function": {"name": turn.call.name, "arguments": turn.call.arguments_json}}]},
-                {"role": "tool", "tool_call_id": turn.call.call_id, "content": turn.result_json},
-            ])
-        body = {"model": self._config.model, "messages": messages, "temperature": 0,
-            "tools": [{"type": "function", "function": {"name": t.name, "description": t.description,
-                      "parameters": json_object(t.input_schema_json)}} for t in request.tools],
-            "tool_choice": "auto", "parallel_tool_calls": False, "max_completion_tokens": 1024}
-        encoded = canonical_json(body).encode()
-        if len(encoded) > 131072:
-            raise ValueError("provider request limit")
         attempted, usage = False, None
+        status, error_hint, category = None, None, "request_invalid"
         try:
+            request = PlannerRequest.model_validate(request)
+            messages = [{"role": "system", "content": request.instructions}, {"role": "user", "content": request.customer}]
+            for turn in request.turns:
+                messages.extend([
+                    {"role": "assistant", "tool_calls": [{"id": turn.call.call_id, "type": "function",
+                      "function": {"name": turn.call.name, "arguments": turn.call.arguments_json}}]},
+                    {"role": "tool", "tool_call_id": turn.call.call_id, "content": turn.result_json},
+                ])
+            body = {"model": self._config.model, "messages": messages, "temperature": 0,
+                "tools": [{"type": "function", "function": {"name": t.name, "description": t.description,
+                          "parameters": json_object(t.input_schema_json)}} for t in request.tools],
+                "tool_choice": "auto", "parallel_tool_calls": False, "max_completion_tokens": 1024}
+            encoded = canonical_json(body).encode()
+            if len(encoded) > 131072:
+                category = "request_limit"
+                raise ValueError("provider request limit")
+            category = "client_error"
             async with httpx.AsyncClient(timeout=self._config.timeout_seconds, follow_redirects=False,
                                          trust_env=False, transport=self._transport) as client:
                 attempted = True
+                category = "transport_error"
                 async with client.stream("POST", "https://api.groq.com/openai/v1/chat/completions",
                     headers={"Authorization": "Bearer " + self._config.api_key.get_secret_value(), "Content-Type": "application/json"},
                     content=encoded) as response:
-                    response.raise_for_status()
+                    status = response.status_code
+                    if not response.is_success:
+                        category, error_hint = "http_error", provider_error_hint(None, status)
                     content = bytearray()
                     async for chunk in response.aiter_bytes():
                         content.extend(chunk)
                         if len(content) > 65536:
+                            if response.is_success: category = "response_limit"
                             raise ValueError("provider response limit")
+                    if not response.is_success:
+                        # Inspect only allowlisted type/code hints from a bounded
+                        # transient body. Never retain/return its message/content.
+                        try:
+                            error_hint = provider_error_hint(json_object(content), status)
+                        except Exception:
+                            pass
+                        raise ValueError("provider status failure")
+            category = "invalid_json"
             data = json_object(content)
             usage = read_usage(data.get("usage"))
+            if data.get("error") is not None:
+                category, error_hint = "provider_error", provider_error_hint(data)
+                raise ValueError("provider error envelope")
+            category = "invalid_response_structure"
             choices = data["choices"]
             if not isinstance(choices, list) or len(choices) != 1:
                 raise ValueError("single completion required")
@@ -79,21 +101,40 @@ class GroqPlanner:
             message = choice["message"]
             if message.get("role") != "assistant":
                 raise ValueError("assistant response required")
+            if choice.get("finish_reason") == "length":
+                category = "truncated_response"
+                raise ValueError("truncated completion")
             calls = message.get("tool_calls")
             if calls:
+                category = "invalid_tool_call"
                 if (choice.get("finish_reason") != "tool_calls" or not isinstance(calls, list) or len(calls) != 1
                         or message.get("content") not in (None, "")):
                     raise ValueError("one complete tool request required")
                 call = calls[0]
                 if set(call) != {"id", "type", "function"} or call["type"] != "function" or set(call["function"]) != {"name", "arguments"}:
                     raise ValueError("invalid structured call")
-                return Decision(kind="tool", tool=ToolCall(call_id=call["id"], name=call["function"]["name"],
-                                                           arguments_json=call["function"]["arguments"]))
+                decision = Decision(kind="tool", tool=ToolCall(call_id=call["id"], name=call["function"]["name"],
+                                                               arguments_json=call["function"]["arguments"]))
+                category = "success"
+                return decision
             if choice.get("finish_reason") != "stop":
                 raise ValueError("complete answer required")
-            return Decision(kind="final", answer=message["content"])
+            category = "invalid_final_answer"
+            decision = Decision(kind="final", answer=message["content"])
+            category = "success"
+            return decision
+        except asyncio.CancelledError:
+            category = "cancelled"
+            raise
+        except httpx.TimeoutException:
+            category = "timeout"
+            raise RuntimeError("planner unavailable") from None
+        except httpx.TransportError:
+            category = "transport_error"
+            raise RuntimeError("planner unavailable") from None
         except Exception:
             # No raw provider bodies, credentials or exception chaining escape.
             raise RuntimeError("planner unavailable") from None
         finally:
-            self._exchanges.append(ProviderExchange(request_attempted=attempted, usage=usage))
+            self._exchanges.append(ProviderExchange(request_attempted=attempted, usage=usage, http_status=status,
+                diagnostic_category=category, provider_error_category=error_hint))

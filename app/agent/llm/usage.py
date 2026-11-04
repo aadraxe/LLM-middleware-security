@@ -1,6 +1,7 @@
 """Optional provider-reported metadata, never authorization or estimated billing."""
 from pydantic import Field, model_validator
 from app.authorization.schemas import StrictModel
+from .diagnostics import DiagnosticCategory, ProviderErrorCategory
 
 
 class TokenUsage(StrictModel):
@@ -18,6 +19,9 @@ class TokenUsage(StrictModel):
 class ProviderExchange(StrictModel):
     request_attempted: bool
     usage: TokenUsage | None = None
+    http_status: int | None = Field(default=None, ge=100, le=599)
+    diagnostic_category: DiagnosticCategory | None = None
+    provider_error_category: ProviderErrorCategory | None = None
 
 
 def read_usage(value):
@@ -35,4 +39,6 @@ def summarize_usage(exchanges):
             "usage_complete": bool(attempted) and len(valid) == len(attempted),
             "provider_reported_tokens": {k: sum(getattr(v, k) for v in valid)
                 for k in ("prompt_tokens", "completion_tokens", "total_tokens")} if valid else None,
+            "provider_diagnostics": [{"provider_call": index + 1,
+                **e.model_dump(exclude={"usage"})} for index, e in enumerate(exchanges)],
             "estimated_cost": None}
