@@ -107,6 +107,7 @@ public class LlmGuardClientTests
 
     [Theory]
     [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.Forbidden)]
     [InlineData(HttpStatusCode.InternalServerError)]
     [InlineData(HttpStatusCode.UnprocessableEntity)]
     public async Task Http_error_follows_fail_mode(HttpStatusCode status)
@@ -147,7 +148,7 @@ public class LlmGuardClientTests
         Assert.Contains(PromptFingerprint.Sha256(prompt), all);
         Assert.Contains($"prompt_length={prompt.Length}", all);
         Assert.Contains(logs.Entries, e => e.Level == Microsoft.Extensions.Logging.LogLevel.Information && e.Message.Contains("Allowed"));
-        Assert.Contains(logs.Entries, e => e.Level == Microsoft.Extensions.Logging.LogLevel.Warning && e.Message.Contains("FailedOpen"));
+        Assert.Contains(logs.Entries, e => e.Level == Microsoft.Extensions.Logging.LogLevel.Warning && e.Message.Contains("FailedClosed"));
     }
 
     [Fact]

@@ -11,16 +11,13 @@ Logging: one line per check in the security event log with the verdict, layer,
 score, source, text length and SHA-256 of the text. The text itself is not logged.
 """
 
-import hashlib
 import hmac
-import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from app.gateway_state import get_pipeline
 from app.models.schemas import CheckRequest, CheckResponse, PipelineResult
@@ -43,16 +40,16 @@ def _configured_keys():
     return [k.strip() for k in os.environ.get(API_KEYS_ENV, "").split(",") if k.strip()]
 
 
-def require_api_key(x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
+def require_api_key(request: Request, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
     keys = _configured_keys()
     if not keys:
-        log.warning("%s is not set; rejecting /v1/check requests", API_KEYS_ENV)
+        log.warning("%s is not set; rejecting authenticated requests", API_KEYS_ENV)
     presented = (x_api_key or "").encode("utf-8")
     # Compare against every key (no early exit) so timing doesn't reveal which one matched
     matched = False
     for key in keys:
         matched |= hmac.compare_digest(presented, key.encode("utf-8"))
-    if not x_api_key or not matched:
+    if len(request.headers.getlist("X-API-Key")) != 1 or not x_api_key or not matched:
         raise HTTPException(status_code=401, detail="Missing or invalid API key",
                             headers={"WWW-Authenticate": "ApiKey"})
 
@@ -76,27 +73,26 @@ def decision_layer(result: PipelineResult) -> str:
 
 
 def _log_check(source, text, verdict, layer, score, latency_ms):
-    from app.main import log_event  # late import: main imports this module
-    log_event({
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "endpoint": "/v1/check",
-        "source": source,
-        "text_length": len(text),
-        "text_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
-        "verdict": verdict,
-        "layer": layer,
-        "score": score,
-        "latency_ms": latency_ms,
-    })
+    from app.main import log_security_event  # late import: main imports this module
+    log_security_event("/v1/check", text, verdict, latency_ms,
+                       source=source, layer=layer, score=score)
 
 
-@router.post("/v1/check", response_model=CheckResponse, dependencies=[Depends(require_api_key)])
+@router.post("/v1/check", response_model=CheckResponse, dependencies=[Depends(require_api_key)],
+             description="Requires X-API-Key matching GATEWAY_API_KEYS. Screens text without generation.")
 def check(request: CheckRequest) -> CheckResponse:
     start = time.perf_counter()
-    result = get_pipeline().analyze(request.text)
+    try:
+        result = get_pipeline().analyze(request.text)
+        layer = decision_layer(result)
+    except Exception:
+        from app.main import log_security_event
+        log_security_event("/v1/check", request.text, "error",
+                           round((time.perf_counter() - start) * 1000, 2),
+                           source=request.source, error_category="analysis_error")
+        raise HTTPException(status_code=503, detail="Security analysis unavailable") from None
     latency_ms = round((time.perf_counter() - start) * 1000, 2)
     verdict = "allow" if result.allowed else "block"
-    layer = decision_layer(result)
     score = float(result.risk_score)
     _log_check(request.source, request.text, verdict, layer, score, latency_ms)
     return CheckResponse(verdict=verdict, score=score, layer=layer, latency_ms=latency_ms)

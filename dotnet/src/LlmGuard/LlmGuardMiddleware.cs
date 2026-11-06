@@ -41,6 +41,10 @@ public sealed class LlmGuardMiddleware
             await _next(context);
             return;
         }
+        context.RequestAborted.ThrowIfCancellationRequested();
+        Microsoft.Net.Http.Headers.MediaTypeHeaderValue.TryParse(request.ContentType, out var mediaType);
+        var supportedType = PayloadInspection.IsJson(mediaType?.MediaType.Value, mediaType?.Charset.Value)
+            && !request.Headers.ContainsKey("Content-Encoding");
 
         if (request.ContentLength > _options.MaxBodyBytes)
         {
@@ -53,13 +57,14 @@ public sealed class LlmGuardMiddleware
         byte[] body;
         try
         {
-            body = await ReadBodyAsync(request, context.RequestAborted);
+            body = await PayloadInspection.ReadAsync(request.Body, _options.MaxBodyBytes, context.RequestAborted);
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or NotSupportedException)
         {
-            // The buffer limit was exceeded (no Content-Length, chunked upload)
-            await RejectAsync(context, StatusCodes.Status413PayloadTooLarge, "payload_too_large",
-                "The request body is too large to screen.", null);
+            // Read failures cannot safely forward a partially consumed body.
+            Log.InspectionFailed(_logger, GuardOutcome.FailedClosed, InspectionOutcome.ExtractionFailure.ToString());
+            await RejectAsync(context, StatusCodes.Status503ServiceUnavailable, "payload_unscreenable",
+                InspectionOutcome.ExtractionFailure.ToString(), null);
             return;
         }
         request.Body.Position = 0;
@@ -70,17 +75,22 @@ public sealed class LlmGuardMiddleware
             return;
         }
 
+        if (!supportedType)
+        {
+            await UnscreenableAsync(context, InspectionOutcome.UnexpectedContentType);
+            return;
+        }
         var prompt = ExtractPrompt(body, out var skipReason);
         if (prompt is null)
         {
-            Log.Skipped(_logger, request.Path, skipReason);
-            await _next(context);
+            await UnscreenableAsync(context, skipReason);
             return;
         }
 
         var decision = await guard.CheckAsync(prompt, "user", context.RequestAborted);
         if (decision.IsAllowed)
         {
+            context.RequestAborted.ThrowIfCancellationRequested();
             await _next(context);
             return;
         }
@@ -101,49 +111,59 @@ public sealed class LlmGuardMiddleware
         ScreenedMethods.Contains(request.Method, StringComparer.OrdinalIgnoreCase)
         && _routes.Any(route => request.Path.StartsWithSegments(route, StringComparison.OrdinalIgnoreCase));
 
-    private async Task<byte[]> ReadBodyAsync(HttpRequest request, CancellationToken cancellationToken)
+    private async Task UnscreenableAsync(HttpContext context, InspectionOutcome reason)
     {
-        using var buffer = new MemoryStream();
-        await request.Body.CopyToAsync(buffer, cancellationToken);
-        return buffer.ToArray();
+        var outcome = _options.FailMode == FailMode.FailOpen ? GuardOutcome.FailedOpen : GuardOutcome.FailedClosed;
+        Log.InspectionFailed(_logger, outcome, reason.ToString());
+        if (outcome == GuardOutcome.FailedOpen)
+        {
+            context.RequestAborted.ThrowIfCancellationRequested();
+            await _next(context);
+            return;
+        }
+        await RejectAsync(context, StatusCodes.Status503ServiceUnavailable, "payload_unscreenable",
+            reason.ToString(), null);
     }
 
-    private string? ExtractPrompt(byte[] body, out string skipReason)
+    private string? ExtractPrompt(byte[] body, out InspectionOutcome skipReason)
     {
-        skipReason = "";
+        skipReason = InspectionOutcome.MissingContent;
         if (body.Length == 0)
         {
-            skipReason = "empty body";
             return null;
         }
         try
         {
             using var document = JsonDocument.Parse(body);
             var element = document.RootElement;
+            if (element.ValueKind != JsonValueKind.Object || PayloadInspection.HasDuplicateProperties(element))
+            {
+                skipReason = InspectionOutcome.UnsupportedFormat;
+                return null;
+            }
             foreach (var segment in _fieldPath)
             {
                 if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(segment, out element))
                 {
-                    skipReason = $"no '{_options.PromptJsonField}' field";
                     return null;
                 }
             }
             if (element.ValueKind != JsonValueKind.String)
             {
-                skipReason = $"'{_options.PromptJsonField}' is not a string";
+                skipReason = InspectionOutcome.UnsupportedFormat;
                 return null;
             }
             var prompt = element.GetString();
-            if (string.IsNullOrEmpty(prompt))
+            if (string.IsNullOrWhiteSpace(prompt))
             {
-                skipReason = $"'{_options.PromptJsonField}' is empty";
                 return null;
             }
+            skipReason = InspectionOutcome.Inspected;
             return prompt;
         }
         catch (JsonException)
         {
-            skipReason = "body is not valid JSON";
+            skipReason = InspectionOutcome.InvalidJson;
             return null;
         }
     }

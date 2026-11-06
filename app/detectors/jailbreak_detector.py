@@ -324,9 +324,8 @@ def llm_judge(prompt: str) -> tuple[bool, float, str]:
         data = judge_request(LLM_JUDGE_SYSTEM_PROMPT,
                              f"Classify this prompt:\n\n{prompt[:2000]}", groq_key)
 
-        # If Groq didn't return the expected success shape, show what it sent
+        # Do not print provider bodies: they may contain sensitive input.
         if "choices" not in data:
-            print(f"[GROQ SAID] {str(data)[:300]}")
             return False, 0.5, "no choices in response"
 
         text = data["choices"][0]["message"]["content"].strip()
@@ -337,9 +336,8 @@ def llm_judge(prompt: str) -> tuple[bool, float, str]:
             float(result.get("confidence", 0.5)),
             result.get("reason", "LLM judge flagged this prompt"),
         )
-    except Exception as e:
-        print(f"[JUDGE ERROR] {str(e)[:120]}")
-        return False, 0.5, f"LLM judge unavailable: {str(e)}"
+    except Exception:
+        return False, 0.5, "LLM judge unavailable: request failed"
 
 
 # ─────────────────────────────────────────────

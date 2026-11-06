@@ -199,6 +199,233 @@ PIPELINE_MODE=cascade
 
 ## Usage
 
+Phase 2B also provides an isolated **local MCP test server** using the official
+`mcp==2.3.0` SDK (`requirements-mcp.txt`). It exposes only `get_order`,
+`send_email` and `issue_refund`, backed by synthetic in-memory support tools.
+Every supported `tools/call` delegates to the existing `ProtectedExecutor`;
+discovery is not authorization. See [the Phase 2B report](docs/AEGISFLOW_PHASE2B_REPORT.md)
+for composition, tests and limits.
+
+Trusted harness code supplies the executor and typed context outside MCP input:
+
+```python
+from mcp import Client
+from app.mcp.server import create_local_protected_server
+
+# executor and trusted_context are supplied by trusted host code, never the agent.
+server = create_local_protected_server(executor, trusted_context)
+# Inside an async harness: real initialize/initialized and JSON-RPC memory streams.
+async with Client(server, mode="legacy", cache=None) as client:
+    result = await client.call_tool("get_order", {"order_id": "order-a"})
+```
+
+No HTTP endpoint or listener is added. The fixed local context is **not production
+authentication**; each distinct local principal/session needs its own server
+binding. Do not expose this binding publicly. Future HTTP serving must verify
+credentials and derive per-session principal/tenant/roles from trusted claims.
+In-memory tests do not exercise HTTP/OAuth authentication. No real email or
+payment operation occurs, and same-process malicious Python is outside scope.
+
+Phase 3A adds optional **trusted provenance and session exposure enforcement**.
+Compose every executor for the experiment with the same `ArtifactStore` and
+`ProvenanceGuard`; the MCP handlers stay unchanged and cannot choose the guard.
+Existing executors without this extension retain Phase 2A behavior.
+
+```python
+from app.authorization.executor import ProtectedExecutor
+from app.provenance.store import ArtifactStore
+from app.provenance.flow_policy import FlowPolicy
+from app.provenance.models import Sensitivity
+from app.provenance.tracker import ProvenanceGuard, InMemoryFlowAuditSink
+
+# registry, ordinary_policy, auth_audit and trusted_context come from the host.
+store = ArtifactStore()
+# Only a trusted harness may attest a newly created session as known clean.
+# Omit known_clean=True for unknown exposure (outbound email then denies).
+store.register_session(trusted_context.principal, known_clean=True)
+flow = FlowPolicy({("tenant-a", "support@example.test"): {Sensitivity.PUBLIC, Sensitivity.INTERNAL}})
+executor = ProtectedExecutor(registry, ordinary_policy, auth_audit, policy_version="v1",
+    flow_guard=ProvenanceGuard(store, flow, InMemoryFlowAuditSink()))
+server = create_local_protected_server(executor, trusted_context)
+```
+
+An authorized `get_order` on this boundary returns `output.data` and a server-issued
+`output.artifact_id`, and marks that tenant/session as exposed to CONFIDENTIAL
+data before releasing the result. Artifact references confer no permission.
+The same session's otherwise permitted email then denies unless exact trusted
+destination configuration explicitly permits that sensitivity. Unknown exposure
+always denies. `issue_refund` keeps its original authorization/approval rules.
+This tracks source metadata and conservative session exposure; it cannot identify
+confidential spans or paraphrases in arbitrary text. Harmless emails can be blocked
+after retrieval. No declassification, production authentication or persistent
+database is provided. See [the Phase 3A report](docs/AEGISFLOW_PHASE3A_REPORT.md).
+
+Run the Phase 3B deterministic local workflow evaluation with the existing Python
+environment and optional MCP requirements installed:
+
+```powershell
+venv/Scripts/python.exe -B -m app.agent.evaluate
+# Explicit synthetic test-only comparison lacking authorization rules:
+venv/Scripts/python.exe -B -m app.agent.evaluate --include-unsafe-test-baseline
+```
+
+The default compares authorization-only with authorization plus provenance over
+12 scripted scenarios. The protected application factory always enables
+provenance. JSON and CSV traces, counts, rates and measured timings are written
+to ignored `.agent-results/phase3b/`. The unsafe comparison requires the explicit
+host CLI flag and uses only in-memory synthetic effects. No LLM planning or real
+customer services are involved. See [the Phase 3B report](docs/AEGISFLOW_PHASE3B_REPORT.md)
+for ground truth, denominators, latency definitions and conservative overblocking.
+
+Run the separate Phase 3C structured mock-planner demonstration:
+
+```powershell
+venv/Scripts/python.exe -B -m app.agent.llm.evaluate
+```
+
+This discovers tools through MCP and exercises a bounded planning loop using the
+provenance-enabled default factory. It writes metadata to ignored
+`.agent-results/phase3c/evaluation.json`; it selects no external provider. The
+optional Groq adapter requires explicit trusted configuration and credentials.
+Its supported model is `openai/gpt-oss-120b`; the retired Llama model ID rejects
+without fallback. The replacement is tested with HTTP fixtures only; no live
+replacement-model evaluation has been performed. Model output
+can propose actions but cannot grant approval, select identity or reset exposure.
+See [the Phase 3C report](docs/AEGISFLOW_PHASE3C_REPORT.md) for bounds, trust
+handling, provider contract references and limitations.
+
+See [the Groq model compatibility note](docs/AEGISFLOW_GROQ_MODEL_COMPATIBILITY.md)
+for the reviewed migration, official tool-calling references and verification.
+
+Phase 3D provides a separate controlled real-model harness. Its default is a
+credential-free dry-run that shows the ten synthetic scenarios and call limits:
+
+```powershell
+venv/Scripts/python.exe -B -m app.agent.llm.live --dry-run
+```
+
+**Only after separate supervisor approval**, an operator can run a small live
+pilot from an interactive terminal:
+
+```powershell
+venv/Scripts/python.exe -B -m app.agent.llm.live --live --provider groq --scenario order_lookup --max-model-calls 2
+```
+
+Live mode requires the exact confirmation phrase shown by the CLI, then a hidden
+API-key prompt. Never put keys in command arguments, files, transcripts or reports;
+the harness does not load environment credentials. Synthetic prompts and tool
+outputs leave the machine for Groq, and requests may incur charges. All tools
+remain fake. There are no automatic retries; interrupted/uncertain runs require
+operator review. Reports are written to ignored `.agent-results/phase3d/<run_id>/`.
+No live evaluation was performed during implementation. See
+[the Phase 3D report](docs/AEGISFLOW_PHASE3D_REPORT.md) for scoring limits, usage
+coverage, safe operation and the explicit **NOT RUN** live-results status.
+
+For a separately approved autonomous synthetic experiment, the explicit local
+entry point can read only `GROQ_API_KEY` from a named credential file:
+
+```powershell
+venv/Scripts/python.exe -B -m app.agent.llm.authorized --approved-live --credential-file .env
+```
+
+This requires prior supervisor authorization; the flag records operator intent,
+not an authentication grant. It runs the fixed ten scenarios with a shared
+40-call cap, no retries and provider-failure/usage stops. It does not populate the
+process environment, interpolate variables or print/store the key. Keep the
+credential file private and ignored by Git. The original interactive CLI and
+credential-free dry-run remain available. See the
+[live evaluation report](docs/AEGISFLOW_LIVE_EVALUATION_REPORT.md) for actual
+results, the rate-limit stop and unresolved FINAL intent.
+
+Phase 3E guards the outward `run_customer_task` final answer with explicit trusted
+local recipient identity and shared session provenance. Missing recipients,
+unknown provenance and disallowed sensitivity return a fixed safe replacement;
+tool execution remains recorded independently. The default local `public-viewer`
+fixture permits PUBLIC/INTERNAL in its own tenant, never CONFIDENTIAL. Host code
+must not construct recipient identity from customer or model text. The raw
+`run_agent` loop and historical evaluators are internal experiment machinery,
+not external response APIs.
+
+```powershell
+venv/Scripts/python.exe -B -m app.output_security.evaluate
+```
+
+This separate mock-only experiment writes metadata under ignored
+`.agent-results/phase3e/<run_id>/`. It reads no credentials and makes no provider
+requests. See [the Phase 3E report](docs/AEGISFLOW_PHASE3E_REPORT.md) for recipient
+assumptions, conservative overblocking, local handoff semantics and results.
+
+Phase 3F adds an opt-in host-owned receipt: **Your request has been received.**
+`open_public_workflow` audits and hands off this fixed acknowledgement before
+accepting a planner or customer text. Its receipt is available independently of
+tool results, model refusal, cancellation and final-output denial. There is no
+template-selection, candidate-text or interpolation argument. Publish it at the
+public admission step, never conditionally on a confidential result. The model's
+answer still goes through the unchanged Phase 3E policy; this receipt is not a
+redacted answer or permission to disclose order data.
+
+Only `workflow.receipt.text` is public content. Receipt binding and measured
+latency stay host-private and are excluded from its default serialization/repr.
+
+```powershell
+venv/Scripts/python.exe -B -m app.output_security.public_evaluate
+```
+
+The mock-only comparison writes new metadata under ignored
+`.agent-results/phase3f/<run_id>/`. See [the Phase 3F report](docs/AEGISFLOW_PHASE3F_REPORT.md)
+for precommitment, recipient/capability boundaries, timing assumptions and the
+separate acknowledgement-versus-generated-answer metrics.
+
+Phase 4A adds host-selected synthetic retrieval with tenant/read authorization,
+trusted source metadata and shared session exposure. Retrieved text is a separate
+lower-trust planner field; it cannot select tools, policies, labels or recipients.
+Tool proposals still cross protected MCP, and generated answers still cross the
+final-response guard. The existing Chroma RAG scripts remain unchanged.
+
+```powershell
+venv/Scripts/python.exe -B -m app.retrieval.evaluate
+```
+
+This 23-case mock-only benchmark writes metadata under ignored
+`.agent-results/phase4a/<run_id>/`. It needs no Chroma, embeddings, credentials or
+live provider. See [the Phase 4A report](docs/AEGISFLOW_PHASE4A_REPORT.md) for the
+15 attack fixtures, actual tool counters, final disclosure results and utility
+limits. Mock attack proposals are not measurements of real-model robustness.
+
+Phase 4B prepares a paired Groq RAG benchmark. The default is a credential-free
+dry-run; **live evaluation has not been run and needs separate supervisor approval**.
+
+```powershell
+venv/Scripts/python.exe -B -m app.retrieval.paired_benchmark --dry-run
+# Full offline HTTP-fixture matrix, not model behavior:
+venv/Scripts/python.exe -B -m app.retrieval.paired_fixtures
+```
+
+The versioned dataset has eight benign/malicious pairs. Each malicious document
+preserves its benign body and appends instructions; identity, labels, customer
+goal and recipient remain fixed. Future live pilots require explicit provider
+selection, interactive confirmation and a hidden key or explicitly named local
+credential file. The profile caps each run at 12 model calls and four steps per
+task, stops on provider failure/rate limiting, and never retries or resumes.
+Reports contain metadata rather than prompts, documents or model answers. See
+[the Phase 4B report](docs/AEGISFLOW_PHASE4B_REPORT.md) for scoring, undefined
+denominators, paired comparisons and Stage B operating instructions.
+
+Both `POST /secure-chat` and `POST /v1/check` require one `X-API-Key`
+header matching a key in the comma-separated `GATEWAY_API_KEYS` environment
+variable. Missing, invalid, duplicate credentials or absent key configuration
+return 401 with `WWW-Authenticate: ApiKey`. Configure keys through your local
+environment or uncommitted `.env`; API keys identify clients, not end users.
+
+Security events are JSONL metadata only: request ID, UTC timestamp, endpoint,
+source, text length/SHA-256, verdict, layer, score, latency and error category.
+Chat logs no longer contain prompts, history, detector explanations or full
+detector responses. Consumers of the previous chat log fields must migrate.
+Deterministic hashes permit correlation and guesses of predictable prompts;
+they are not anonymization. Restrict log access and retention. Existing logs
+are not scrubbed automatically. Analysis errors return a sanitized 503 without
+generation; unexpected generation exceptions return a sanitized 502.
+
 ```bash
 uvicorn app.main:app --reload            # open http://127.0.0.1:8000/docs
 pytest tests/ -v

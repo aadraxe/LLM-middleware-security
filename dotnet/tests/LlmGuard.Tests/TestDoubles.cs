@@ -98,7 +98,7 @@ public static class Make
 {
     public const string ApiKey = "unit-test-key";
 
-    public static LlmGuardOptions Options(FailMode failMode = FailMode.FailOpen, int timeoutMs = 2000) => new()
+    public static LlmGuardOptions Options(FailMode failMode = FailMode.FailClosed, int timeoutMs = 2000) => new()
     {
         GatewayUrl = new Uri("http://gateway.test"),
         ApiKey = ApiKey,

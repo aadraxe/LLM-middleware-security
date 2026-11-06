@@ -177,8 +177,8 @@ def llm_judge(prompt: str) -> tuple[bool, float, str]:
             float(result.get("confidence", 0.5)),
             result.get("reason", "LLM judge flagged injection"),
         )
-    except Exception as e:
-        return False, 0.5, f"LLM judge unavailable: {str(e)}"
+    except Exception:
+        return False, 0.5, "LLM judge unavailable: request failed"
 
 
 # ─────────────────────────────────────────────

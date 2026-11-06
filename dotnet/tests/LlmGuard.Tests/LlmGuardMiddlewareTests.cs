@@ -16,7 +16,7 @@ namespace LlmGuard.Tests;
 /// <summary>Middleware tests on a minimal in-memory host with the real DI registration.</summary>
 public class LlmGuardMiddlewareTests
 {
-    private static async Task<(HttpClient Client, FakeGateway Gateway, IHost Host, List<string> Seen)> Start(
+    internal static async Task<(HttpClient Client, FakeGateway Gateway, IHost Host, List<string> Seen)> Start(
         Action<LlmGuardOptions>? configure = null, FakeGateway? gateway = null, CapturingLoggerProvider? logs = null)
     {
         gateway ??= new FakeGateway();
@@ -129,16 +129,16 @@ public class LlmGuardMiddlewareTests
     [InlineData("""{"prompt":""}""")]
     [InlineData("""not json""")]
     [InlineData("")]
-    public async Task Requests_without_a_prompt_pass_through_unscreened(string body)
+    public async Task Requests_without_a_prompt_are_rejected_without_execution(string body)
     {
         var (client, gateway, host, seen) = await Start();
         using var _h = host;
 
         using var response = await client.PostAsync("/chat", JsonBody(body));
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         Assert.Empty(gateway.Calls);
-        Assert.Equal(new[] { body }, seen);
+        Assert.Empty(seen);
     }
 
     [Fact]
@@ -156,7 +156,8 @@ public class LlmGuardMiddlewareTests
     [Fact]
     public async Task Gateway_down_fail_open_lets_the_request_through()
     {
-        var (client, _, host, seen) = await Start(gateway: new FakeGateway { Respond = FakeGateway.Hang });
+        var (client, _, host, seen) = await Start(o => o.FailMode = FailMode.FailOpen,
+            gateway: new FakeGateway { Respond = FakeGateway.Hang });
         using var _h = host;
 
         using var response = await client.PostAsync("/chat", JsonBody("""{"prompt":"hello"}"""));

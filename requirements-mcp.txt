@@ -1,0 +1,3 @@
+# Optional Phase 2B SDK; install in the repository virtual environment.
+# The official SDK supplies native client/server protocol and memory transport.
+mcp==2.3.0

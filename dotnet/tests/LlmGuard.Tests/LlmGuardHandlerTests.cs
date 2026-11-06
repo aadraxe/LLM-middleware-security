@@ -6,7 +6,7 @@ namespace LlmGuard.Tests;
 
 public class LlmGuardHandlerTests
 {
-    private static (HttpClient Client, RecordingInnerHandler Inner) Build(FakeGateway gateway, FailMode mode = FailMode.FailOpen)
+    private static (HttpClient Client, RecordingInnerHandler Inner) Build(FakeGateway gateway, FailMode mode = FailMode.FailClosed)
     {
         var inner = new RecordingInnerHandler();
         var handler = new LlmGuardHandler(Make.Client(gateway, Make.Options(mode, timeoutMs: 150)), NullLogger<LlmGuardHandler>.Instance)
@@ -57,7 +57,7 @@ public class LlmGuardHandlerTests
         var gateway = new FakeGateway();
         var (client, _) = Build(gateway);
         var payload = Chat(
-            ("user", new object[] { new { type = "text", text = "Describe this" }, new { type = "image_url", image_url = new { url = "https://x/y.png" } }, new { type = "text", text = "briefly" } }),
+            ("user", new object[] { new { type = "text", text = "Describe this" }, new { type = "text", text = "briefly" } }),
             ("tool", "Search result: the sky is blue"));
 
         await client.PostAsJsonAsync("v1/chat/completions", payload);
@@ -83,16 +83,15 @@ public class LlmGuardHandlerTests
     [InlineData("""{"messages":"not an array"}""", "application/json")]
     [InlineData("plain text body", "text/plain")]
     [InlineData("{ broken json", "application/json")]
-    public async Task Requests_without_screenable_messages_pass_through(string body, string mediaType)
+    public async Task Requests_without_screenable_messages_are_rejected(string body, string mediaType)
     {
         var gateway = new FakeGateway();
         var (client, inner) = Build(gateway);
 
-        using var response = await client.PostAsync("v1/other", new StringContent(body, Encoding.UTF8, mediaType));
-
-        Assert.True(response.IsSuccessStatusCode);
+        await Assert.ThrowsAsync<LlmGuardUnavailableException>(() =>
+            client.PostAsync("v1/other", new StringContent(body, Encoding.UTF8, mediaType)));
         Assert.Empty(gateway.Calls);
-        Assert.Equal(body, Assert.Single(inner.Bodies));
+        Assert.Empty(inner.Bodies);
     }
 
     [Fact]

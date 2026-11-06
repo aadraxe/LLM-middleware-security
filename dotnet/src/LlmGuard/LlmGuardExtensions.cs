@@ -103,6 +103,10 @@ namespace LlmGuard
             {
                 errors.Add("LlmGuard:MaxBodyBytes must be positive.");
             }
+            if (!Enum.IsDefined(o.FailMode))
+            {
+                errors.Add("LlmGuard:FailMode must be FailClosed or explicit FailOpen.");
+            }
             return errors.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(errors);
         }
     }

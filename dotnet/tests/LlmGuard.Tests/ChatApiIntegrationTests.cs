@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace LlmGuard.Tests;
 
@@ -18,14 +19,16 @@ public class ChatApiIntegrationTests
     {
         public FakeGateway Gateway { get; } = new();
         public RecordingInnerHandler Llm { get; } = new();
-        public string FailMode { get; init; } = "FailOpen";
+        public string? FailMode { get; init; }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
+            // In-memory tests do not need the machine's privileged EventLog sink.
+            builder.ConfigureLogging(logging => logging.ClearProviders());
             builder.UseSetting("LlmGuard:ApiKey", Make.ApiKey);
             builder.UseSetting("LlmGuard:GatewayUrl", "http://gateway.test");
             builder.UseSetting("LlmGuard:Timeout", "00:00:00.200");
-            builder.UseSetting("LlmGuard:FailMode", FailMode);
+            if (FailMode is not null) builder.UseSetting("LlmGuard:FailMode", FailMode);
             builder.ConfigureTestServices(services =>
             {
                 services.AddHttpClient(LlmGuardDefaults.GatewayHttpClientName).ConfigurePrimaryHttpMessageHandler(() => Gateway);
@@ -105,7 +108,7 @@ public class ChatApiIntegrationTests
     [Fact]
     public async Task Gateway_down_with_fail_open_still_answers()
     {
-        using var app = new App();
+        using var app = new App { FailMode = "FailOpen" };
         app.Gateway.Respond = FakeGateway.Hang;
         var client = app.CreateClient();
 
@@ -146,7 +149,7 @@ public class ChatApiIntegrationTests
 
         Assert.Equal(new[] { "/chat" }, options.ProtectedRoutes);
         Assert.Equal("prompt", options.PromptJsonField);
-        Assert.Equal(LlmGuard.FailMode.FailOpen, options.FailMode);
+        Assert.Equal(LlmGuard.FailMode.FailClosed, options.FailMode);
         Assert.Equal(TimeSpan.FromMilliseconds(200), options.Timeout);
     }
 }
