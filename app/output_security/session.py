@@ -23,21 +23,28 @@ async def run_protected_agent(application, actor, planner, customer, recipient, 
     """
     try:
         connection, samples, context = application.connect_bound(actor)
-        guard = FinalResponseGuard(application.store,
-            local_recipient_policy() if output_policy is None else output_policy,
-            InMemoryOutputAuditSink() if output_audit is None else output_audit)
-        async with connection as client:
-            outcome = await run_agent(client, planner, customer, samples, limits=limits)
-        released = await guard.release(outcome.final_answer if outcome.status == "FINAL" else None,
-                                       context, recipient)
-        executions = Counter()
-        for event in outcome.trace:
-            executions.update(event["executions"])
-        return CustomerOutcome(**outcome.model_dump(), final_answer=released.text,
-            output_decision=released.decision, model_text_released=released.model_text_released,
-            output_enforcement_ms=released.enforcement_ms,
-            response_complete=outcome.status == "FINAL" and released.model_text_released,
-            tool_execution_counts=dict(executions))
+        return await _run_bound_agent(application, connection, samples, context, planner, customer, recipient,
+            limits=limits, output_policy=output_policy, output_audit=output_audit)
     except Exception:
         # Do not return raw Outcome or provider/argument-bearing exception text.
         raise RuntimeError("agent session unavailable") from None
+
+
+async def _run_bound_agent(application, connection, samples, context, planner, customer, recipient, *,
+                           limits=None, output_policy=None, output_audit=None):
+    """Internal exact-binding adapter shared by precommitted public workflows."""
+    guard = FinalResponseGuard(application.store,
+        local_recipient_policy() if output_policy is None else output_policy,
+        InMemoryOutputAuditSink() if output_audit is None else output_audit)
+    async with connection as client:
+        outcome = await run_agent(client, planner, customer, samples, limits=limits)
+    released = await guard.release(outcome.final_answer if outcome.status == "FINAL" else None,
+                                   context, recipient)
+    executions = Counter()
+    for event in outcome.trace:
+        executions.update(event["executions"])
+    return CustomerOutcome(**outcome.model_dump(), final_answer=released.text,
+        output_decision=released.decision, model_text_released=released.model_text_released,
+        output_enforcement_ms=released.enforcement_ms,
+        response_complete=outcome.status == "FINAL" and released.model_text_released,
+        tool_execution_counts=dict(executions))

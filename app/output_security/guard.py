@@ -95,6 +95,11 @@ class RecipientPolicy:
         return (recipient.tenant_id == principal.tenant_id and exposure.sensitivity != Sensitivity.UNKNOWN
                 and exposure.sensitivity in self._grants.get((recipient.tenant_id, recipient.recipient_id), frozenset()))
 
+    def permits_public_receipt(self, principal, recipient):
+        """Identity-only permission for fixed host content, never model text."""
+        return (recipient.tenant_id == principal.tenant_id and Sensitivity.PUBLIC in
+                self._grants.get((recipient.tenant_id, recipient.recipient_id), frozenset()))
+
 
 class IdentifierModel(StrictModel):
     value: Identifier

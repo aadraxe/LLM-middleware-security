@@ -355,6 +355,27 @@ This separate mock-only experiment writes metadata under ignored
 requests. See [the Phase 3E report](docs/AEGISFLOW_PHASE3E_REPORT.md) for recipient
 assumptions, conservative overblocking, local handoff semantics and results.
 
+Phase 3F adds an opt-in host-owned receipt: **Your request has been received.**
+`open_public_workflow` audits and hands off this fixed acknowledgement before
+accepting a planner or customer text. Its receipt is available independently of
+tool results, model refusal, cancellation and final-output denial. There is no
+template-selection, candidate-text or interpolation argument. Publish it at the
+public admission step, never conditionally on a confidential result. The model's
+answer still goes through the unchanged Phase 3E policy; this receipt is not a
+redacted answer or permission to disclose order data.
+
+Only `workflow.receipt.text` is public content. Receipt binding and measured
+latency stay host-private and are excluded from its default serialization/repr.
+
+```powershell
+venv/Scripts/python.exe -B -m app.output_security.public_evaluate
+```
+
+The mock-only comparison writes new metadata under ignored
+`.agent-results/phase3f/<run_id>/`. See [the Phase 3F report](docs/AEGISFLOW_PHASE3F_REPORT.md)
+for precommitment, recipient/capability boundaries, timing assumptions and the
+separate acknowledgement-versus-generated-answer metrics.
+
 Both `POST /secure-chat` and `POST /v1/check` require one `X-API-Key`
 header matching a key in the comma-separated `GATEWAY_API_KEYS` environment
 variable. Missing, invalid, duplicate credentials or absent key configuration
