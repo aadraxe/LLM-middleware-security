@@ -15,7 +15,7 @@ class CustomerOutcome(Outcome):
 
 
 async def run_protected_agent(application, actor, planner, customer, recipient, *, limits=None,
-                              output_policy=None, output_audit=None):
+                              output_policy=None, output_audit=None, retrieval=None):
     """Host-only composition; no recipient or policy is read from model/customer.
 
     The raw loop is internal experiment machinery. Only the guarded value leaves
@@ -24,18 +24,23 @@ async def run_protected_agent(application, actor, planner, customer, recipient, 
     try:
         connection, samples, context = application.connect_bound(actor)
         return await _run_bound_agent(application, connection, samples, context, planner, customer, recipient,
-            limits=limits, output_policy=output_policy, output_audit=output_audit)
+            limits=limits, output_policy=output_policy, output_audit=output_audit, retrieval=retrieval)
     except Exception:
         # Do not return raw Outcome or provider/argument-bearing exception text.
         raise RuntimeError("agent session unavailable") from None
 
 
 async def _run_bound_agent(application, connection, samples, context, planner, customer, recipient, *,
-                           limits=None, output_policy=None, output_audit=None):
+                           limits=None, output_policy=None, output_audit=None, retrieval=None):
     """Internal exact-binding adapter shared by precommitted public workflows."""
     guard = FinalResponseGuard(application.store,
         local_recipient_policy() if output_policy is None else output_policy,
         InMemoryOutputAuditSink() if output_audit is None else output_audit)
+    if retrieval is not None:
+        from app.retrieval.boundary import RetrievalPlan
+        if not isinstance(retrieval, RetrievalPlan):
+            raise TypeError("trusted retrieval plan required")
+        planner = retrieval.bind(planner, context, application.store, limits=limits)
     async with connection as client:
         outcome = await run_agent(client, planner, customer, samples, limits=limits)
     released = await guard.release(outcome.final_answer if outcome.status == "FINAL" else None,

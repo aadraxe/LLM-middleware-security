@@ -376,6 +376,22 @@ The mock-only comparison writes new metadata under ignored
 for precommitment, recipient/capability boundaries, timing assumptions and the
 separate acknowledgement-versus-generated-answer metrics.
 
+Phase 4A adds host-selected synthetic retrieval with tenant/read authorization,
+trusted source metadata and shared session exposure. Retrieved text is a separate
+lower-trust planner field; it cannot select tools, policies, labels or recipients.
+Tool proposals still cross protected MCP, and generated answers still cross the
+final-response guard. The existing Chroma RAG scripts remain unchanged.
+
+```powershell
+venv/Scripts/python.exe -B -m app.retrieval.evaluate
+```
+
+This 23-case mock-only benchmark writes metadata under ignored
+`.agent-results/phase4a/<run_id>/`. It needs no Chroma, embeddings, credentials or
+live provider. See [the Phase 4A report](docs/AEGISFLOW_PHASE4A_REPORT.md) for the
+15 attack fixtures, actual tool counters, final disclosure results and utility
+limits. Mock attack proposals are not measurements of real-model robustness.
+
 Both `POST /secure-chat` and `POST /v1/check` require one `X-API-Key`
 header matching a key in the comma-separated `GATEWAY_API_KEYS` environment
 variable. Missing, invalid, duplicate credentials or absent key configuration

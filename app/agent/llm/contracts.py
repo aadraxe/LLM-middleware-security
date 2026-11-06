@@ -1,6 +1,7 @@
 """Structured untrusted model proposals, never permission grants."""
 import json
 from typing import Annotated, Literal, Protocol
+from uuid import UUID
 
 from pydantic import Field, field_validator, model_validator
 from app.authorization.schemas import Identifier, StrictModel, canonical_json
@@ -65,11 +66,18 @@ class ToolTurn(StrictModel):
     result_json: str = Field(repr=False)
 
 
+class RetrievedPassage(StrictModel):
+    artifact_id: UUID
+    source_id: Identifier
+    text: Annotated[str, Field(max_length=8192, repr=False)]
+
+
 class PlannerRequest(StrictModel):
     instructions: str = INSTRUCTIONS
     customer: str = Field(repr=False)
     tools: tuple[ToolDefinition, ...]
     turns: tuple[ToolTurn, ...] = Field(default=(), repr=False)
+    retrieved: tuple[RetrievedPassage, ...] = Field(default=(), repr=False)
 
 
 class Planner(Protocol):

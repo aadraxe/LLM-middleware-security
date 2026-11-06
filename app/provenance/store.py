@@ -143,3 +143,23 @@ class ArtifactStore:
             self._artifacts[artifact_id] = item
             self._sessions[self._key(principal)] = updated
             return item
+
+    def record_document(self, principal, source_id, tenant_id, content, *, sensitivity, trust_level):
+        """Trusted host retrieval only; text never supplies these source labels."""
+        with self._mutex:
+            state = self.exposure(principal)
+            if tenant_id != principal.tenant_id or not isinstance(sensitivity, Sensitivity) or not isinstance(trust_level, TrustLevel):
+                raise ValueError("invalid retrieved source metadata")
+            artifact_id = uuid4()
+            if artifact_id in self._artifacts:
+                raise ValueError("duplicate artifact ID")
+            item = DataArtifact(artifact_id=artifact_id, source_kind="RETRIEVED_DOCUMENT",
+                source_resource_id=source_id, producer_tool="retrieval/host", tenant_id=tenant_id,
+                session_id=principal.session_id, sensitivity=sensitivity, trust_level=trust_level,
+                parent_artifact_ids=(), created_at=datetime.now(timezone.utc),
+                content_digest=hashlib.sha256(canonical_json(content).encode()).hexdigest())
+            self._artifacts[artifact_id] = item
+            self._sessions[self._key(principal)] = state.model_copy(update={
+                "sensitivity": join_sensitivity([state.sensitivity, sensitivity]),
+                "artifact_ids": (*state.artifact_ids, artifact_id), "revision": state.revision + 1})
+            return item

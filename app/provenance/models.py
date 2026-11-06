@@ -4,7 +4,7 @@ from enum import StrEnum
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from app.authorization.schemas import Identifier, StrictModel
 
 
@@ -23,9 +23,9 @@ class TrustLevel(StrEnum):
 
 class DataArtifact(StrictModel):
     artifact_id: UUID
-    source_kind: Literal["TOOL_RESULT", "DERIVED"]
+    source_kind: Literal["TOOL_RESULT", "DERIVED", "RETRIEVED_DOCUMENT"]
     source_resource_id: Identifier
-    producer_tool: Literal["support/get_order"]
+    producer_tool: Literal["support/get_order", "retrieval/host"]
     tenant_id: Identifier
     session_id: Identifier
     sensitivity: Sensitivity
@@ -33,6 +33,12 @@ class DataArtifact(StrictModel):
     parent_artifact_ids: tuple[UUID, ...]
     created_at: datetime
     content_digest: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] | None = None
+
+    @model_validator(mode="after")
+    def producer_matches_source(self):
+        if (self.source_kind == "RETRIEVED_DOCUMENT") != (self.producer_tool == "retrieval/host"):
+            raise ValueError("invalid provenance producer")
+        return self
 
     @field_validator("created_at")
     @classmethod

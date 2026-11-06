@@ -161,14 +161,14 @@ class PublicWorkflow:
     def receipt(self):
         return self._receipt
 
-    async def run(self, planner, customer, *, limits=None):
+    async def run(self, planner, customer, *, limits=None, retrieval=None):
         with self._run_lock:
             if self._used:
                 raise RuntimeError("public workflow already used")
             self._used = True
         try:
             return await _run_bound_agent(self._application, self._connection, self._samples, self._context,
-                planner, customer, self._recipient, limits=limits, output_audit=self._output_audit)
+                planner, customer, self._recipient, limits=limits, output_audit=self._output_audit, retrieval=retrieval)
         except Exception:
             raise RuntimeError("agent session unavailable") from None
 

@@ -48,6 +48,10 @@ class GroqPlanner:
         try:
             request = PlannerRequest.model_validate(request)
             messages = [{"role": "system", "content": request.instructions}, {"role": "user", "content": request.customer}]
+            if request.retrieved:
+                # Data in a user-role envelope, never system/developer content.
+                messages.append({"role": "user", "content": canonical_json({
+                    "untrusted_retrieved_documents": [p.model_dump(mode="json") for p in request.retrieved]})})
             for turn in request.turns:
                 messages.extend([
                     {"role": "assistant", "tool_calls": [{"id": turn.call.call_id, "type": "function",
