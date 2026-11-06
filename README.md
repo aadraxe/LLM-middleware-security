@@ -392,6 +392,25 @@ live provider. See [the Phase 4A report](docs/AEGISFLOW_PHASE4A_REPORT.md) for t
 15 attack fixtures, actual tool counters, final disclosure results and utility
 limits. Mock attack proposals are not measurements of real-model robustness.
 
+Phase 4B prepares a paired Groq RAG benchmark. The default is a credential-free
+dry-run; **live evaluation has not been run and needs separate supervisor approval**.
+
+```powershell
+venv/Scripts/python.exe -B -m app.retrieval.paired_benchmark --dry-run
+# Full offline HTTP-fixture matrix, not model behavior:
+venv/Scripts/python.exe -B -m app.retrieval.paired_fixtures
+```
+
+The versioned dataset has eight benign/malicious pairs. Each malicious document
+preserves its benign body and appends instructions; identity, labels, customer
+goal and recipient remain fixed. Future live pilots require explicit provider
+selection, interactive confirmation and a hidden key or explicitly named local
+credential file. The profile caps each run at 12 model calls and four steps per
+task, stops on provider failure/rate limiting, and never retries or resumes.
+Reports contain metadata rather than prompts, documents or model answers. See
+[the Phase 4B report](docs/AEGISFLOW_PHASE4B_REPORT.md) for scoring, undefined
+denominators, paired comparisons and Stage B operating instructions.
+
 Both `POST /secure-chat` and `POST /v1/check` require one `X-API-Key`
 header matching a key in the comma-separated `GATEWAY_API_KEYS` environment
 variable. Missing, invalid, duplicate credentials or absent key configuration
