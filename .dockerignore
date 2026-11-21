@@ -1,0 +1,20 @@
+# Allow-list: everything is excluded unless re-included below, so .env, venv/,
+# data/, results/, .agent-results/, .test-tmp/, benchmark/, rag/, dotnet/, infra/,
+# .git/ and any other model checkpoints never enter the build context.
+**
+
+!Dockerfile
+!requirements-gateway.txt
+!app/main.py
+!app/check_api.py
+!app/gateway_state.py
+!app/models/
+!app/services/
+!app/detectors/
+!models/distilbert/
+
+# Never re-included, even inside allowed directories.
+**/__pycache__
+**/*.py[cod]
+**/.env
+**/.env.*

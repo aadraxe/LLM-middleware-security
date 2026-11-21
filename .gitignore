@@ -81,3 +81,15 @@ dotnet/**/bin/
 dotnet/**/obj/
 dotnet/artifacts/
 dotnet/**/TestResults/
+
+# =========================
+# Terraform
+# =========================
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfplan.txt
+tfplan
+crash.log
+*.auto.tfvars

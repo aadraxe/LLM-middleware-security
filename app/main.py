@@ -14,11 +14,21 @@ except ImportError:
     pass
 
 from contextlib import asynccontextmanager
+import sys
 
 from app.models.schemas import ChatRequest, ChatResponse
 from app.gateway_state import get_pipeline
 from app.services.llm_service import call_llm
 from app import check_api
+
+# Deployment profile. Unset (the default) leaves local behavior unchanged.
+# "aws" is the screening-only deployment: POST /v1/check and GET /healthz only
+# (no /secure-chat generation, no / info route, no /docs, /redoc or
+# /openapi.json), and security events go to stdout for CloudWatch.
+GATEWAY_PROFILE = os.environ.get("GATEWAY_PROFILE", "").strip().lower()
+if GATEWAY_PROFILE not in ("", "aws"):
+    raise RuntimeError(f"GATEWAY_PROFILE must be unset or 'aws', got {GATEWAY_PROFILE!r}")
+SCREENING_ONLY = GATEWAY_PROFILE == "aws"
 
 
 @asynccontextmanager
@@ -41,6 +51,11 @@ LOG_FILE = "app/logs/security_events.jsonl"
 
 
 def log_event(event: dict):
+    if SCREENING_ONLY:
+        # Same metadata-only event, one JSON object per line, for the log driver.
+        sys.stdout.write(json.dumps(event) + "\n")
+        sys.stdout.flush()
+        return
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(json.dumps(event) + "\n")
@@ -62,6 +77,13 @@ def log_security_event(endpoint, text, verdict, latency_ms, *, layer=None,
         "latency_ms": latency_ms,
         "error_category": error_category,
     })
+
+
+@app.get("/healthz", include_in_schema=False)
+def healthz():
+    # The lifespan builds the pipeline before serving, so a reply means the model loaded.
+    get_pipeline()
+    return {"status": "ok"}
 
 
 @app.get("/")
@@ -126,3 +148,10 @@ def secure_chat(request: ChatRequest):
         response=llm_response,
         message="Request allowed.",
     )
+
+
+if SCREENING_ONLY:
+    _REMOVED_PATHS = {"/", "/secure-chat", "/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"}
+    app.router.routes[:] = [r for r in app.router.routes
+                            if getattr(r, "path", None) not in _REMOVED_PATHS]
+    app.openapi_url = app.docs_url = app.redoc_url = None
