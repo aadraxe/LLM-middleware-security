@@ -129,19 +129,21 @@ Invalid settings (missing key, non-HTTP URL, zero timeout) stop the app at start
 
 ## Overhead
 
-Measured with [`benchmarks/LlmGuard.Overhead`](benchmarks/LlmGuard.Overhead):
-- **Setup:** 300 requests (after 20 warm-up) against the real gateway in its default `local_only` mode on the same laptop (i5-12500H, Windows 11, Release build).
-- **Prompts:** the 200 deepset benchmark prompts plus 100 from the held-out test split. 80 were blocked.
+Measured with [`benchmarks/LlmGuard.Overhead`](benchmarks/LlmGuard.Overhead) on 2026-11-24 at commit `b6ecca2`. The raw summary of both runs, with the machine description and exact commands, is in [`docs/results/dotnet_overhead.json`](../docs/results/dotnet_overhead.json).
+- **Setup:** 300 measured requests after 20 warm-up, against the real gateway in its default `local_only` mode on a laptop (i5-12500H, 15.7 GB RAM, Windows 11, Release build).
+- **Prompts:** 320 are loaded: the 200 deepset benchmark prompts, then 120 from the held-out test split. The first 20 are the warm-up, so the measured 300 are 180 deepset and 120 test prompts. 80 were blocked.
 - **Method:** the app runs in memory, and each request to a guarded route is paired with an identical request to an unguarded route.
 
-| Per request | Mean | p50 | p95 |
+| Per request (run 1) | Mean | p50 | p95 |
 |---|---|---|---|
-| **Added by the middleware, total** | 95.5 ms | 65.0 ms | 297.5 ms |
-| of which: gateway processing (classifier, rules) | 90.1 ms | 59.4 ms | 292.2 ms |
-| of which: transport to the gateway (HTTP, JSON, uvicorn) | 5.2 ms | 5.1 ms | 6.2 ms |
-| **of which: the middleware itself** (buffering, JSON parsing, hashing, logging) | **0.19 ms** | 0.15 ms | 0.41 ms |
+| **Added by the middleware, total** | 38.80 ms | 28.90 ms | 100.09 ms |
+| of which: gateway processing (classifier, rules) | 34.37 ms | 24.50 ms | 95.96 ms |
+| of which: transport to the gateway (HTTP, JSON, uvicorn) | 4.18 ms | 4.12 ms | 5.27 ms |
+| **of which: the middleware itself** (buffering, JSON parsing, hashing, logging) | **0.24 ms** | 0.18 ms | 0.47 ms |
 
-A second run gave the same split (0.20 ms mean and 0.41 ms p95 for the middleware itself). Nearly all of the cost is the gateway's classifier, which runs on CPU and scales with prompt length.
+A second run gave the same split: 0.22 ms mean and 0.38 ms p95 for the middleware itself, 35.85 ms mean gateway processing. Nearly all of the cost is the gateway's classifier, which runs on CPU and scales with prompt length.
+
+An earlier measurement on the same laptop, with no saved raw output, reported 95.5 ms mean total and 90.1 ms mean gateway processing, with the same 0.19 to 0.20 ms for the middleware itself. The middleware and transport figures reproduce; the gateway's classifier time is now lower. The cause was not investigated (it may be dependency versions or machine load), so the numbers above should be treated as specific to this run.
 
 ```bash
 GATEWAY_API_KEYS=<key> uvicorn app.main:app --port 8000          # repo root

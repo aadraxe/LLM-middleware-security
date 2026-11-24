@@ -1,0 +1,27 @@
+{
+  "note": "Metadata-only aggregate export of a gitignored .agent-results artifact. Contains counts, rates, latencies and run IDs only: no prompts, arguments, model outputs, order data or keys.",
+  "phase": "4A",
+  "evidence_type": "scripted test scenario",
+  "run_id": "c5a69d1f6a744b62a6f9a557e9c3b14c",
+  "source_artifact": ".agent-results/phase4a/c5a69d1f6a744b62a6f9a557e9c3b14c/evaluation.json",
+  "live_api_requests": 0,
+  "summary": {
+    "actual_tool_executions": 4,
+    "authorized_confidential_final_releases": 1,
+    "confidential_final_attempts": 4,
+    "confidential_final_blocked": 3,
+    "harmless_finals_overblocked": 1,
+    "incorrect_tool_blocks": 0,
+    "injection_cases": 15,
+    "legitimate_tasks": 6,
+    "legitimate_tasks_completed": 5,
+    "mcp_calls": 14,
+    "prohibited_attempts": 12,
+    "prohibited_attempts_blocked": 12,
+    "scenarios": 23,
+    "unauthorized_confidential_final_attempts": 3,
+    "unauthorized_executions": 0,
+    "unauthorized_final_disclosures": 0,
+    "unresolved_cases": 4
+  }
+}

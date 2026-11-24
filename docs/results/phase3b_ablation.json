@@ -1,0 +1,143 @@
+{
+  "note": "Metadata-only aggregate export of a gitignored .agent-results artifact. Contains counts, rates, latencies and run IDs only: no prompts, arguments, model outputs, order data or keys.",
+  "phase": "3B",
+  "evidence_type": "scripted test scenario",
+  "source_artifact": ".agent-results/phase3b/evaluation.json",
+  "configurations": {
+    "authorization_only": {
+      "attempted_actions": 18,
+      "incorrect_block_rate": {
+        "denominator": 11,
+        "numerator": 0,
+        "rate": 0.0
+      },
+      "isolated_policy_ms": {
+        "median": 0.03609998384490609,
+        "p95": 0.07741499866824596,
+        "samples": 18
+      },
+      "legitimate_action_allow_rate": {
+        "denominator": 11,
+        "numerator": 11,
+        "rate": 1.0
+      },
+      "legitimate_task_completion_rate": {
+        "denominator": 5,
+        "numerator": 5,
+        "rate": 1.0
+      },
+      "mcp_call_ms": {
+        "median": 1.5402000135509297,
+        "p95": 4.578234990185586,
+        "samples": 18
+      },
+      "prohibited_operation_block_rate": {
+        "denominator": 7,
+        "numerator": 5,
+        "rate": 0.7142857142857143
+      },
+      "security_enforcement_ms": {
+        "median": 0.22444999194703996,
+        "p95": 0.6030949967680498,
+        "samples": 18
+      },
+      "skipped_actions": 1,
+      "tasks": 12,
+      "unauthorized_execution_rate": {
+        "denominator": 7,
+        "numerator": 2,
+        "rate": 0.2857142857142857
+      }
+    },
+    "authorization_provenance": {
+      "attempted_actions": 18,
+      "incorrect_block_rate": {
+        "denominator": 11,
+        "numerator": 1,
+        "rate": 0.09090909090909091
+      },
+      "isolated_policy_ms": {
+        "median": 0.030449999030679464,
+        "p95": 0.035630009369924664,
+        "samples": 18
+      },
+      "legitimate_action_allow_rate": {
+        "denominator": 11,
+        "numerator": 10,
+        "rate": 0.9090909090909091
+      },
+      "legitimate_task_completion_rate": {
+        "denominator": 5,
+        "numerator": 4,
+        "rate": 0.8
+      },
+      "mcp_call_ms": {
+        "median": 0.8434999908786267,
+        "p95": 4.0731500019319355,
+        "samples": 18
+      },
+      "prohibited_operation_block_rate": {
+        "denominator": 7,
+        "numerator": 7,
+        "rate": 1.0
+      },
+      "security_enforcement_ms": {
+        "median": 0.25999998615588993,
+        "p95": 0.5416050305939275,
+        "samples": 18
+      },
+      "skipped_actions": 1,
+      "tasks": 12,
+      "unauthorized_execution_rate": {
+        "denominator": 7,
+        "numerator": 0,
+        "rate": 0.0
+      }
+    },
+    "unsafe_test_only": {
+      "attempted_actions": 19,
+      "incorrect_block_rate": {
+        "denominator": 12,
+        "numerator": 0,
+        "rate": 0.0
+      },
+      "isolated_policy_ms": {
+        "median": 0.029799994081258774,
+        "p95": 0.03989000688306988,
+        "samples": 19
+      },
+      "legitimate_action_allow_rate": {
+        "denominator": 12,
+        "numerator": 12,
+        "rate": 1.0
+      },
+      "legitimate_task_completion_rate": {
+        "denominator": 5,
+        "numerator": 5,
+        "rate": 1.0
+      },
+      "mcp_call_ms": {
+        "median": 1.8310000014025718,
+        "p95": 3.3742399944458157,
+        "samples": 19
+      },
+      "prohibited_operation_block_rate": {
+        "denominator": 7,
+        "numerator": 0,
+        "rate": 0.0
+      },
+      "security_enforcement_ms": {
+        "median": 0.20750000840052962,
+        "p95": 0.39659999602008644,
+        "samples": 19
+      },
+      "skipped_actions": 0,
+      "tasks": 12,
+      "unauthorized_execution_rate": {
+        "denominator": 7,
+        "numerator": 7,
+        "rate": 1.0
+      }
+    }
+  }
+}
