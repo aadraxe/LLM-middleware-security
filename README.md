@@ -145,7 +145,7 @@ After retrieving the chunks most relevant to a query, **each chunk is screened b
 - **Backend / API:** Python, FastAPI, Pydantic
 - **Detection:** regex, custom heuristics, fine-tuned DistilBERT (PyTorch, Hugging Face Transformers), LLM-as-judge (`gpt-oss-120b` via Groq)
 - **RAG:** ChromaDB (vector store), sentence-transformers (`all-MiniLM-L6-v2`)
-- **Testing:** pytest (100 tests), xUnit (60 tests for the .NET client)
+- **Testing:** pytest (809 tests via `tests/run_offline.py`), xUnit (104 tests for the .NET client); both suites last verified passing on 2026-11-24 at commit `b6ecca2`
 
 ## Project structure
 
@@ -288,8 +288,11 @@ provenance-enabled default factory. It writes metadata to ignored
 `.agent-results/phase3c/evaluation.json`; it selects no external provider. The
 optional Groq adapter requires explicit trusted configuration and credentials.
 Its supported model is `openai/gpt-oss-120b`; the retired Llama model ID rejects
-without fallback. The replacement is tested with HTTP fixtures only; no live
-replacement-model evaluation has been performed. Model output
+without fallback. The Groq adapter has since been used live: single-scenario
+pilots and one approved ten-scenario campaign with `openai/gpt-oss-120b` ran on
+2026-11-04. The campaign stopped on its 18th request with HTTP 429 (rate
+limited) and was not retried; see the
+[live evaluation report](docs/AEGISFLOW_LIVE_EVALUATION_REPORT.md). Model output
 can propose actions but cannot grant approval, select identity or reset exposure.
 See [the Phase 3C report](docs/AEGISFLOW_PHASE3C_REPORT.md) for bounds, trust
 handling, provider contract references and limitations.
@@ -317,9 +320,11 @@ the harness does not load environment credentials. Synthetic prompts and tool
 outputs leave the machine for Groq, and requests may incur charges. All tools
 remain fake. There are no automatic retries; interrupted/uncertain runs require
 operator review. Reports are written to ignored `.agent-results/phase3d/<run_id>/`.
-No live evaluation was performed during implementation. See
-[the Phase 3D report](docs/AEGISFLOW_PHASE3D_REPORT.md) for scoring limits, usage
-coverage, safe operation and the explicit **NOT RUN** live-results status.
+No live evaluation was performed during implementation. Five live runs were made
+with this CLI afterwards (two with the retired Llama model, three single-scenario
+`openai/gpt-oss-120b` pilots); they are listed in
+[the Phase 3D report](docs/AEGISFLOW_PHASE3D_REPORT.md), which also covers scoring
+limits, usage coverage and safe operation.
 
 For a separately approved autonomous synthetic experiment, the explicit local
 entry point can read only `GROQ_API_KEY` from a named credential file:
@@ -393,7 +398,11 @@ live provider. See [the Phase 4A report](docs/AEGISFLOW_PHASE4A_REPORT.md) for t
 limits. Mock attack proposals are not measurements of real-model robustness.
 
 Phase 4B prepares a paired Groq RAG benchmark. The default is a credential-free
-dry-run; **live evaluation has not been run and needs separate supervisor approval**.
+dry-run; live evaluation needs separate supervisor approval. Two small live pilots
+ran on 2026-11-05 (the FAQ pair and the refund pair, six model calls in total). In
+both malicious variants the model never proposed the injected action, so the
+security checks were not exercised by these pilots; see
+[the Phase 4B report](docs/AEGISFLOW_PHASE4B_REPORT.md).
 
 ```powershell
 venv/Scripts/python.exe -B -m app.retrieval.paired_benchmark --dry-run

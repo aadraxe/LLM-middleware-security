@@ -1,0 +1,61 @@
+{
+  "note": "Raw summary printed by dotnet/benchmarks/LlmGuard.Overhead. Aggregate timings only; no prompt text.",
+  "benchmark": "dotnet/benchmarks/LlmGuard.Overhead",
+  "date": "2026-11-24",
+  "repository_commit": "b6ecca2 (main)",
+  "machine": {
+    "cpu": "12th Gen Intel(R) Core(TM) i5-12500H",
+    "ram_gb": 15.7,
+    "os": "Microsoft Windows 11 Home Single Language 10.0.26300",
+    "dotnet_sdk": "9.0.301 (projects target net8.0, Release build)",
+    "python": "3.13.9"
+  },
+  "gateway": {
+    "command": "python -B -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --no-access-log",
+    "pipeline_mode": "local_only",
+    "model": "models/distilbert (fine-tuned DistilBERT, threshold 0.61)",
+    "api_key": "random throwaway key generated for the run, not recorded"
+  },
+  "method": {
+    "command": "dotnet run -c Release --no-restore --project dotnet/benchmarks/LlmGuard.Overhead -- http://127.0.0.1:8000 300",
+    "warmup_requests": 20,
+    "measured_requests": 300,
+    "prompts": "first 320 lines of data/processed/benchmark_200.jsonl (200 deepset prompts) then data/processed/test.jsonl (120 held-out test prompts)",
+    "pairing": "each prompt sent to an in-memory /plain endpoint and a /guarded endpoint behind LlmGuardMiddleware, interleaved",
+    "definitions": {
+      "added_total": "t(/guarded) - t(/plain)",
+      "gateway_processing": "latency_ms reported by the gateway",
+      "gateway_transport": "gateway HTTP round trip - latency_ms (HTTP, JSON, uvicorn)",
+      "middleware_only": "added_total - gateway round trip (.NET buffering, JSON parsing, hashing, logging, decision)"
+    },
+    "percentiles": "p50 = sorted[n/2], p95 = sorted[floor(n*0.95)], as implemented in Program.cs"
+  },
+  "runs": [
+    {
+      "run": 1,
+      "started": "2026-11-24T11:47:09-05:00",
+      "requests": 300,
+      "blocked_by_gateway": 80,
+      "ms": {
+        "added_total": {"mean": 38.80, "p50": 28.90, "p95": 100.09},
+        "gateway_processing": {"mean": 34.37, "p50": 24.50, "p95": 95.96},
+        "gateway_transport": {"mean": 4.18, "p50": 4.12, "p95": 5.27},
+        "middleware_only": {"mean": 0.24, "p50": 0.18, "p95": 0.47},
+        "unguarded_baseline": {"mean": 0.22, "p50": 0.18, "p95": 0.41}
+      }
+    },
+    {
+      "run": 2,
+      "started": "2026-11-24T11:47:50-05:00",
+      "requests": 300,
+      "blocked_by_gateway": 80,
+      "ms": {
+        "added_total": {"mean": 40.12, "p50": 28.52, "p95": 112.56},
+        "gateway_processing": {"mean": 35.85, "p50": 23.88, "p95": 106.43},
+        "gateway_transport": {"mean": 4.05, "p50": 3.99, "p95": 4.70},
+        "middleware_only": {"mean": 0.22, "p50": 0.17, "p95": 0.38},
+        "unguarded_baseline": {"mean": 0.19, "p50": 0.16, "p95": 0.41}
+      }
+    }
+  ]
+}

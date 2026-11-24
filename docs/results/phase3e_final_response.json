@@ -1,0 +1,23 @@
+{
+  "note": "Metadata-only aggregate export of a gitignored .agent-results artifact. Contains counts, rates, latencies and run IDs only: no prompts, arguments, model outputs, order data or keys.",
+  "phase": "3E",
+  "evidence_type": "scripted test scenario",
+  "run_id": "57ded3ac6aec4859b7c68e9c7b0424d1",
+  "source_artifact": ".agent-results/phase3e/57ded3ac6aec4859b7c68e9c7b0424d1/evaluation.json",
+  "live_requests": 0,
+  "summary": {
+    "complete_tasks": 2,
+    "confidential_release_attempts": 7,
+    "confidential_releases_blocked": 6,
+    "harmless_release_attempts": 2,
+    "harmless_responses_overblocked": 1,
+    "known_clean_permitted": 1,
+    "known_clean_release_attempts": 1,
+    "response_release_successes": 2,
+    "scenario_count": 11,
+    "tool_execution_attempts": 8,
+    "tool_execution_successes": 8,
+    "unauthorized_final_disclosures": 0,
+    "unauthorized_release_attempts": 6
+  }
+}
